@@ -1,13 +1,18 @@
 package mr
 
-import "testing"
+import (
+	"testing"
 
-func TestCoordinatorExample(t *testing.T) {
+	"github.com/stretchr/testify/assert"
+)
 
-	got := 4 + 6
-	want := 10
+func TestExampleRpc(t *testing.T) {
+	c := Coordinator{}
+	args := ExampleArgs{X: 99}
+	var reply ExampleReply
 
-	if got != want {
-		t.Errorf("got %q, wanted %q", got, want)
-	}
+	err := c.Example(&args, &reply)
+	assert.NoError(t, err)
+	assert.Equal(t, 100, reply.Y, "RPC reply.Y should equal to 100!")
+
 }
