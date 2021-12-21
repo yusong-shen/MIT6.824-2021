@@ -6,13 +6,16 @@ package main
 // go run mrsequential.go wc.so pg*.txt
 //
 
-import "fmt"
-import "6.824/mr"
-import "plugin"
-import "os"
-import "log"
-import "io/ioutil"
-import "sort"
+import (
+	"fmt"
+	"io/ioutil"
+	"log"
+	"os"
+	"plugin"
+	"sort"
+
+	"6.824/mr"
+)
 
 // for sorting by key.
 type ByKey []mr.KeyValue
@@ -24,6 +27,8 @@ func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 func main() {
 	if len(os.Args) < 3 {
+		// Example: go build -race -buildmode=plugin ../mrapps/wc.go
+		// go run -race mrsequential.go wc.so pg*.txt
 		fmt.Fprintf(os.Stderr, "Usage: mrsequential xxx.so inputfiles...\n")
 		os.Exit(1)
 	}
