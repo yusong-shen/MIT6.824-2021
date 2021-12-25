@@ -59,6 +59,12 @@ func CallExample() {
 
 	// reply.Y should be 100.
 	fmt.Printf("reply.Y %v\n", reply.Y)
+
+	argsRegister := RegisterWorkerArgs{}
+	replyRegister := RegisterWorkerReply{}
+
+	call("Coordinator.RegisterWorker", &argsRegister, &replyRegister)
+	fmt.Printf("reply.workerId %v\n", replyRegister.WorkerId)
 }
 
 //

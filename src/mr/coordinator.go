@@ -5,6 +5,9 @@ import (
 	"net"
 	"net/http"
 	"net/rpc"
+	"strconv"
+	"sync"
+	"sync/atomic"
 )
 
 type Coordinator struct {
@@ -22,6 +25,33 @@ type Coordinator struct {
 func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
 	reply.Y = args.X + 1
 	return nil
+}
+
+// Add your RPC definitions here.
+var workerCnt int32
+
+type SafeMap struct {
+	m  map[string]bool
+	mu sync.Mutex
+}
+
+var workerStatusMap SafeMap = SafeMap{m: make(map[string]bool)}
+
+func (c *Coordinator) RegisterWorker(args *RegisterWorkerArgs, reply *RegisterWorkerReply) error {
+
+	workerId := strconv.Itoa(int(atomic.AddInt32(&workerCnt, 1)))
+	reply.WorkerId = workerId
+	workerStatusMap.mu.Lock()
+	workerStatusMap.m[workerId] = true
+	workerStatusMap.mu.Unlock()
+
+	return nil
+}
+
+func (c *Coordinator) checkWorkerStatus(workerId string) bool {
+	workerStatusMap.mu.Lock()
+	defer workerStatusMap.mu.Unlock()
+	return workerStatusMap.m[workerId]
 }
 
 //
