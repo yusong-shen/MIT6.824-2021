@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,5 +40,43 @@ func TestRegisterWorkerRpc(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "2", reply.WorkerId)
 	assert.True(t, c.checkWorkerStatus("2"))
+
+}
+
+func TestAskTaskRpc(t *testing.T) {
+	c := Coordinator{}
+	args := AskTaskArgs{WorkerId: "2"}
+	var reply AskTaskReply
+
+	err := c.AskTask(&args, &reply)
+	fmt.Println(reply.T.toString())
+	assert.NoError(t, err)
+	assert.Equal(t, reply.T.taskType, 1)
+	assert.Equal(t, reply.T.inputfiles, []string{"file1"})
+
+}
+
+func TestInitializeTasks(t *testing.T) {
+	c := Coordinator{inputfiles: []string{"file1", "file2"}}
+	c.initializeTasks()
+	status, ok := c.checkTaskStatus(Task{taskType: 1})
+	assert.False(t, ok)
+	assert.Equal(t, status, 0)
+
+	status, ok = c.checkTaskStatus(Task{taskType: 1, inputfiles: []string{"file1", "file2"}})
+	assert.False(t, ok)
+	assert.Equal(t, status, 0)
+
+	status, ok = c.checkTaskStatus(Task{taskType: 2})
+	assert.False(t, ok)
+	assert.Equal(t, status, 0)
+
+	status, ok = c.checkTaskStatus(Task{taskType: 1, inputfiles: []string{"file1"}})
+	assert.True(t, ok)
+	assert.Equal(t, status, 1)
+
+	status, ok = c.checkTaskStatus(Task{taskType: 1, inputfiles: []string{"file2"}})
+	assert.True(t, ok)
+	assert.Equal(t, status, 1)
 
 }

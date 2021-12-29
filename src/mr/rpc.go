@@ -31,6 +31,14 @@ type RegisterWorkerReply struct {
 	WorkerId string
 }
 
+type AskTaskArgs struct {
+	WorkerId string
+}
+
+type AskTaskReply struct {
+	T Task
+}
+
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.
 // Can't use the current directory since

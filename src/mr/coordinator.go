@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -11,11 +12,45 @@ import (
 )
 
 type Coordinator struct {
-	// TODO: Your definitions here.
+	inputfiles     []string
+	reduceTasksCnt int
+}
 
+type SafeStatusMap struct {
+	m  map[string]int
+	mu sync.Mutex
+}
+
+// key: string representation of task
+// value: task status, 1-idle, 2-in progress, 3-completed
+var taskStatusMap SafeStatusMap = SafeStatusMap{m: make(map[string]int)}
+
+func (c *Coordinator) initializeTasks() {
+
+	for _, file := range c.inputfiles {
+		t := Task{taskType: 1, inputfiles: []string{file}}
+		taskStatusMap.mu.Lock()
+		taskStatusMap.m[t.toString()] = 1
+		taskStatusMap.mu.Unlock()
+	}
+}
+
+func (c *Coordinator) checkTaskStatus(t Task) (int, bool) {
+	taskStatusMap.mu.Lock()
+	defer taskStatusMap.mu.Unlock()
+	status, ok := taskStatusMap.m[t.toString()]
+	return status, ok
 }
 
 // Your code here -- RPC handlers for the worker to call.
+type Task struct {
+	taskType   int // 0-map, 1-reduce
+	inputfiles []string
+}
+
+func (t Task) toString() string {
+	return fmt.Sprintf("%v", t)
+}
 
 //
 // an example RPC handler.
@@ -54,6 +89,13 @@ func (c *Coordinator) checkWorkerStatus(workerId string) bool {
 	return workerStatusMap.m[workerId]
 }
 
+func (c *Coordinator) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
+	fmt.Printf("WorkerId : %v\n", args.WorkerId)
+	t := Task{taskType: 1, inputfiles: []string{"file1"}}
+	reply.T = t
+	return nil
+}
+
 //
 // start a thread that listens for RPCs from worker.go
 //
@@ -88,8 +130,8 @@ func (c *Coordinator) Done() bool {
 // nReduce is the number of reduce tasks to use.
 //
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
-	c := Coordinator{}
-
+	c := Coordinator{inputfiles: files, reduceTasksCnt: nReduce}
+	c.initializeTasks()
 	// TODO: Your code here.
 
 	c.server()
