@@ -2,6 +2,7 @@ package mr
 
 import (
 	"fmt"
+
 	"log"
 	"net"
 	"net/http"
@@ -16,6 +17,24 @@ type Coordinator struct {
 	reduceTasksCnt int
 }
 
+type Task struct {
+	TaskType   int // 0-map, 1-reduce
+	Inputfiles []string
+}
+
+func (t Task) toString() string {
+	return fmt.Sprintf("%v", t)
+}
+
+var workerCnt int32
+
+type SafeMap struct {
+	m  map[string]bool
+	mu sync.Mutex
+}
+
+var workerStatusMap SafeMap = SafeMap{m: make(map[string]bool)}
+
 type SafeStatusMap struct {
 	m  map[string]int
 	mu sync.Mutex
@@ -26,6 +45,7 @@ type SafeStatusMap struct {
 var taskStatusMap SafeStatusMap = SafeStatusMap{m: make(map[string]int)}
 var idleTasksQueue chan Task = make(chan Task, 100)
 
+// gives each input file to a map task
 func (c *Coordinator) initializeTasks() {
 
 	for _, file := range c.inputfiles {
@@ -37,7 +57,7 @@ func (c *Coordinator) initializeTasks() {
 		// TODO: what if queue is full?
 		idleTasksQueue <- t
 	}
-	fmt.Printf("Len: %d\n", len(idleTasksQueue))
+	fmt.Printf("Queue Len: %d\n", len(idleTasksQueue))
 
 }
 
@@ -49,34 +69,6 @@ func (c *Coordinator) checkTaskStatus(t Task) (int, bool) {
 }
 
 // Your code here -- RPC handlers for the worker to call.
-type Task struct {
-	TaskType   int // 0-map, 1-reduce
-	Inputfiles []string
-}
-
-func (t Task) toString() string {
-	return fmt.Sprintf("%v", t)
-}
-
-//
-// an example RPC handler.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
-	reply.Y = args.X + 1
-	return nil
-}
-
-// Add your RPC definitions here.
-var workerCnt int32
-
-type SafeMap struct {
-	m  map[string]bool
-	mu sync.Mutex
-}
-
-var workerStatusMap SafeMap = SafeMap{m: make(map[string]bool)}
 
 func (c *Coordinator) RegisterWorker(args *RegisterWorkerArgs, reply *RegisterWorkerReply) error {
 
@@ -140,7 +132,6 @@ func (c *Coordinator) Done() bool {
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{inputfiles: files, reduceTasksCnt: nReduce}
 	c.initializeTasks()
-	// TODO: Your code here.
 
 	c.server()
 	return &c

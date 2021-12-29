@@ -1,10 +1,13 @@
 package mr
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"io/ioutil"
 	"log"
 	"net/rpc"
+	"os"
 )
 
 //
@@ -31,45 +34,41 @@ func ihash(key string) int {
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
-	// TODO: Your worker implementation here.
-
-	// uncomment to send the Example RPC to the coordinator.
-	CallExample()
-
-}
-
-//
-// example function to show how to make an RPC call to the coordinator.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-func CallExample() {
-
-	// declare an argument structure.
-	args := ExampleArgs{}
-
-	// fill in the argument(s).
-	args.X = 99
-
-	// declare a reply structure.
-	reply := ExampleReply{}
-
-	// send the RPC request, wait for the reply.
-	call("Coordinator.Example", &args, &reply)
-
-	// reply.Y should be 100.
-	fmt.Printf("reply.Y %v\n", reply.Y)
-
 	argsRegister := RegisterWorkerArgs{}
 	replyRegister := RegisterWorkerReply{}
-
-	call("Coordinator.RegisterWorker", &argsRegister, &replyRegister)
-	fmt.Printf("replyRegister.workerId: %v\n", replyRegister.WorkerId)
+	CallRegisterWorker(&argsRegister, &replyRegister)
 
 	argsAskTask := AskTaskArgs{WorkerId: string(replyRegister.WorkerId)}
 	replyAskTask := AskTaskReply{}
-	call("Coordinator.AskTask", &argsAskTask, &replyAskTask)
-	fmt.Printf("replyAskTask: %v\n", replyAskTask.T)
+	CallAskTask(&argsAskTask, &replyAskTask)
+
+	if len(replyAskTask.T.Inputfiles) > 0 {
+		inputFilename := replyAskTask.T.Inputfiles[0]
+		content := ReadFile(inputFilename)
+		n := len(content)
+		if len(content) > 10 {
+			n = 10
+		}
+		fmt.Printf("Content: %v...\n", content[:n])
+		fmt.Printf("Content len: %v\n", len(content))
+		intermediateData := mapf(inputFilename, content)
+		fmt.Printf("intermediateData len: %v\n", len(intermediateData))
+		if len(intermediateData) > 0 {
+			fmt.Printf("intermediateData[0]: %v\n", intermediateData[0])
+		}
+	}
+
+}
+
+func CallRegisterWorker(args *RegisterWorkerArgs, reply *RegisterWorkerReply) {
+
+	call("Coordinator.RegisterWorker", args, reply)
+	fmt.Printf("CallRegisterWorker - reply.workerId: %v\n", reply.WorkerId)
+}
+
+func CallAskTask(args *AskTaskArgs, reply *AskTaskReply) {
+	call("Coordinator.AskTask", args, reply)
+	fmt.Printf("CallAskTask - reply.T: %v\n", reply.T)
 }
 
 //
@@ -93,4 +92,43 @@ func call(rpcname string, args interface{}, reply interface{}) bool {
 
 	fmt.Printf("Error: %v\n", err)
 	return false
+}
+
+func ReadFile(filename string) string {
+	fmt.Printf("Reading file: %v\n", filename)
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Fatalf("cannot open %v", filename)
+	}
+	content, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatalf("cannot read %v", filename)
+	}
+	file.Close()
+	return string(content)
+}
+
+func WriteIntermediateDataToFile(intermediateData []KeyValue, filename string) {
+	file, err := json.MarshalIndent(intermediateData, "", " ")
+	if err != nil {
+		log.Fatalf("Error: %v\n", err)
+	}
+	err = ioutil.WriteFile(filename, file, 0644)
+	if err != nil {
+		log.Fatalf("Error write to file: %v\n", err)
+	}
+}
+
+func ReadJsonData(filename string) []KeyValue {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		log.Fatalf("Error: %v\n", err)
+	}
+	var kvList []KeyValue
+	err = json.Unmarshal(data, &kvList)
+	if err != nil {
+		log.Fatalf("Error: %v\n", err)
+	}
+	return kvList
+
 }

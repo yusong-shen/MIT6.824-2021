@@ -1,13 +1,30 @@
 package mr
 
-import "testing"
+import (
+	"fmt"
+	"os"
+	"testing"
 
-func TestWorkerExample(t *testing.T) {
+	"github.com/stretchr/testify/assert"
+)
 
-	got := 4 + 6
-	want := 10
+func TestReadFile(t *testing.T) {
+	content := ReadFile("testInput.txt")
+	fmt.Println(content)
+	expected := "testline word123\nalice 234 bob\ncharlie"
+	assert.Equal(t, expected, content)
+}
 
-	if got != want {
-		t.Errorf("got %q, wanted %q", got, want)
-	}
+func TestIHash(t *testing.T) {
+	assert.Equal(t, 2, ihash("book")%10)
+}
+
+func TestWriteIntermediateDataToFile(t *testing.T) {
+	data := []KeyValue{{Key: "k1", Value: "v1"}, {Key: "k2", Value: "v2"}}
+	WriteIntermediateDataToFile(data, "temp.json")
+
+	output := ReadJsonData("temp.json")
+	assert.ElementsMatch(t, data, output)
+
+	os.Remove("temp.json")
 }
