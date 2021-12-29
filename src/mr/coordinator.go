@@ -29,7 +29,7 @@ var idleTasksQueue chan Task = make(chan Task, 100)
 func (c *Coordinator) initializeTasks() {
 
 	for _, file := range c.inputfiles {
-		t := Task{taskType: 1, inputfiles: []string{file}}
+		t := Task{TaskType: 1, Inputfiles: []string{file}}
 		fmt.Printf("Initializing task: %v\n", t)
 		taskStatusMap.mu.Lock()
 		taskStatusMap.m[t.toString()] = 1
@@ -50,8 +50,8 @@ func (c *Coordinator) checkTaskStatus(t Task) (int, bool) {
 
 // Your code here -- RPC handlers for the worker to call.
 type Task struct {
-	taskType   int // 0-map, 1-reduce
-	inputfiles []string
+	TaskType   int // 0-map, 1-reduce
+	Inputfiles []string
 }
 
 func (t Task) toString() string {

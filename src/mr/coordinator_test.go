@@ -52,31 +52,31 @@ func TestAskTaskRpc(t *testing.T) {
 	err := c.AskTask(&args, &reply)
 	fmt.Println(reply.T.toString())
 	assert.NoError(t, err)
-	assert.Equal(t, reply.T.taskType, 1)
-	assert.Equal(t, reply.T.inputfiles, []string{"file1"})
+	assert.Equal(t, reply.T.TaskType, 1)
+	assert.Equal(t, reply.T.Inputfiles, []string{"file1"})
 
 }
 
 func TestInitializeTasks(t *testing.T) {
 	c := Coordinator{inputfiles: []string{"file1", "file2"}}
 	c.initializeTasks()
-	status, ok := c.checkTaskStatus(Task{taskType: 1})
+	status, ok := c.checkTaskStatus(Task{TaskType: 1})
 	assert.False(t, ok)
 	assert.Equal(t, status, 0)
 
-	status, ok = c.checkTaskStatus(Task{taskType: 1, inputfiles: []string{"file1", "file2"}})
+	status, ok = c.checkTaskStatus(Task{TaskType: 1, Inputfiles: []string{"file1", "file2"}})
 	assert.False(t, ok)
 	assert.Equal(t, status, 0)
 
-	status, ok = c.checkTaskStatus(Task{taskType: 2})
+	status, ok = c.checkTaskStatus(Task{TaskType: 2})
 	assert.False(t, ok)
 	assert.Equal(t, status, 0)
 
-	status, ok = c.checkTaskStatus(Task{taskType: 1, inputfiles: []string{"file1"}})
+	status, ok = c.checkTaskStatus(Task{TaskType: 1, Inputfiles: []string{"file1"}})
 	assert.True(t, ok)
 	assert.Equal(t, status, 1)
 
-	status, ok = c.checkTaskStatus(Task{taskType: 1, inputfiles: []string{"file2"}})
+	status, ok = c.checkTaskStatus(Task{TaskType: 1, Inputfiles: []string{"file2"}})
 	assert.True(t, ok)
 	assert.Equal(t, status, 1)
 

@@ -5,7 +5,6 @@ import (
 	"hash/fnv"
 	"log"
 	"net/rpc"
-	"time"
 )
 
 //
@@ -70,7 +69,6 @@ func CallExample() {
 	argsAskTask := AskTaskArgs{WorkerId: string(replyRegister.WorkerId)}
 	replyAskTask := AskTaskReply{}
 	call("Coordinator.AskTask", &argsAskTask, &replyAskTask)
-	time.Sleep(1 * time.Second)
 	fmt.Printf("replyAskTask: %v\n", replyAskTask.T)
 }
 
@@ -93,6 +91,6 @@ func call(rpcname string, args interface{}, reply interface{}) bool {
 		return true
 	}
 
-	fmt.Println(err)
+	fmt.Printf("Error: %v\n", err)
 	return false
 }
