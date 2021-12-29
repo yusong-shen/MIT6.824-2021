@@ -44,7 +44,8 @@ func TestRegisterWorkerRpc(t *testing.T) {
 }
 
 func TestAskTaskRpc(t *testing.T) {
-	c := Coordinator{}
+	c := Coordinator{inputfiles: []string{"file1", "file2"}}
+	c.initializeTasks()
 	args := AskTaskArgs{WorkerId: "2"}
 	var reply AskTaskReply
 

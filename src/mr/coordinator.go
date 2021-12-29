@@ -24,15 +24,21 @@ type SafeStatusMap struct {
 // key: string representation of task
 // value: task status, 1-idle, 2-in progress, 3-completed
 var taskStatusMap SafeStatusMap = SafeStatusMap{m: make(map[string]int)}
+var idleTasksQueue chan Task = make(chan Task, 100)
 
 func (c *Coordinator) initializeTasks() {
 
 	for _, file := range c.inputfiles {
 		t := Task{taskType: 1, inputfiles: []string{file}}
+		fmt.Printf("Initializing task: %v\n", t)
 		taskStatusMap.mu.Lock()
 		taskStatusMap.m[t.toString()] = 1
 		taskStatusMap.mu.Unlock()
+		// TODO: what if queue is full?
+		idleTasksQueue <- t
 	}
+	fmt.Printf("Len: %d\n", len(idleTasksQueue))
+
 }
 
 func (c *Coordinator) checkTaskStatus(t Task) (int, bool) {
@@ -91,7 +97,9 @@ func (c *Coordinator) checkWorkerStatus(workerId string) bool {
 
 func (c *Coordinator) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
 	fmt.Printf("WorkerId : %v\n", args.WorkerId)
-	t := Task{taskType: 1, inputfiles: []string{"file1"}}
+	t := <-idleTasksQueue
+	fmt.Printf("Len: %d\n", len(idleTasksQueue))
+	fmt.Printf("Task: %v\n", t)
 	reply.T = t
 	return nil
 }
