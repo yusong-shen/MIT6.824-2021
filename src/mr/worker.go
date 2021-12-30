@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/rpc"
 	"os"
+	"strconv"
 )
 
 //
@@ -42,8 +43,10 @@ func Worker(mapf func(string, string) []KeyValue,
 	replyAskTask := AskTaskReply{}
 	CallAskTask(&argsAskTask, &replyAskTask)
 
-	if len(replyAskTask.T.Inputfiles) > 0 {
-		inputFilename := replyAskTask.T.Inputfiles[0]
+	task := replyAskTask.T
+
+	if len(task.Inputfiles) > 0 {
+		inputFilename := task.Inputfiles[0]
 		content := ReadFile(inputFilename)
 		n := len(content)
 		if len(content) > 10 {
@@ -55,6 +58,16 @@ func Worker(mapf func(string, string) []KeyValue,
 		fmt.Printf("intermediateData len: %v\n", len(intermediateData))
 		if len(intermediateData) > 0 {
 			fmt.Printf("intermediateData[0]: %v\n", intermediateData[0])
+		}
+
+		intermediateDataMap := make(map[int][]KeyValue)
+		AssignKvToReducer(intermediateData, intermediateDataMap, replyAskTask.ReduceTasksCnt)
+		// intermediate files is mr-X-Y, where X is the Map task number,
+		// and Y is the reduce task number.
+		for iReduce, kvList := range intermediateDataMap {
+			intermediateFilename := "mr-" + strconv.Itoa(task.TaskId) + "-" + strconv.Itoa(iReduce)
+			WriteIntermediateDataToFile(kvList, intermediateFilename)
+
 		}
 	}
 
@@ -131,4 +144,14 @@ func ReadJsonData(filename string) []KeyValue {
 	}
 	return kvList
 
+}
+
+func AssignKvToReducer(intermediateData []KeyValue, intermediateDataMap map[int][]KeyValue, reduceTasksCnt int) {
+	for _, kv := range intermediateData {
+		iReduce := ihash(kv.Key) % reduceTasksCnt
+		if _, exist := intermediateDataMap[iReduce]; !exist {
+			intermediateDataMap[iReduce] = make([]KeyValue, 0)
+		}
+		intermediateDataMap[iReduce] = append(intermediateDataMap[iReduce], kv)
+	}
 }

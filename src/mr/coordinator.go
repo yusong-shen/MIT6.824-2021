@@ -20,6 +20,7 @@ type Coordinator struct {
 type Task struct {
 	TaskType   int // 0-map, 1-reduce
 	Inputfiles []string
+	TaskId     int
 }
 
 func (t Task) toString() string {
@@ -48,8 +49,8 @@ var idleTasksQueue chan Task = make(chan Task, 100)
 // gives each input file to a map task
 func (c *Coordinator) initializeTasks() {
 
-	for _, file := range c.inputfiles {
-		t := Task{TaskType: 1, Inputfiles: []string{file}}
+	for i, file := range c.inputfiles {
+		t := Task{TaskType: 1, Inputfiles: []string{file}, TaskId: i}
 		fmt.Printf("Initializing task: %v\n", t)
 		taskStatusMap.mu.Lock()
 		taskStatusMap.m[t.toString()] = 1
@@ -93,6 +94,7 @@ func (c *Coordinator) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
 	fmt.Printf("Len: %d\n", len(idleTasksQueue))
 	fmt.Printf("Task: %v\n", t)
 	reply.T = t
+	reply.ReduceTasksCnt = c.reduceTasksCnt
 	return nil
 }
 

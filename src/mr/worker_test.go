@@ -28,3 +28,14 @@ func TestWriteIntermediateDataToFile(t *testing.T) {
 
 	os.Remove("temp.json")
 }
+
+func TestAssignKvToReducer(t *testing.T) {
+	data := []KeyValue{{Key: "k1", Value: "v1"}, {Key: "k2", Value: "v2"}, {Key: "k1", Value: "v3"}}
+	outputDataMap := make(map[int][]KeyValue)
+	AssignKvToReducer(data, outputDataMap, 2)
+	fmt.Println(outputDataMap)
+	assert.Equal(t, 2, len(outputDataMap))
+	assert.ElementsMatch(t, []KeyValue{{Key: "k2", Value: "v2"}}, outputDataMap[0])
+	assert.ElementsMatch(t, []KeyValue{{Key: "k1", Value: "v1"}, {Key: "k1", Value: "v3"}}, outputDataMap[1])
+
+}

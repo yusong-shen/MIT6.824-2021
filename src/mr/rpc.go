@@ -23,7 +23,8 @@ type AskTaskArgs struct {
 }
 
 type AskTaskReply struct {
-	T Task
+	T              Task
+	ReduceTasksCnt int
 }
 
 // Cook up a unique-ish UNIX-domain socket name
