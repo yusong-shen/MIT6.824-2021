@@ -18,7 +18,7 @@ type Coordinator struct {
 }
 
 type Task struct {
-	TaskType   int // 0-map, 1-reduce
+	TaskType   int // 1-map, 2-reduce
 	Inputfiles []string
 	TaskId     int
 }

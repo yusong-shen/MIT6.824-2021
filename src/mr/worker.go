@@ -45,30 +45,10 @@ func Worker(mapf func(string, string) []KeyValue,
 
 	task := replyAskTask.T
 
-	if len(task.Inputfiles) > 0 {
-		inputFilename := task.Inputfiles[0]
-		content := ReadFile(inputFilename)
-		n := len(content)
-		if len(content) > 10 {
-			n = 10
-		}
-		fmt.Printf("Content: %v...\n", content[:n])
-		fmt.Printf("Content len: %v\n", len(content))
-		intermediateData := mapf(inputFilename, content)
-		fmt.Printf("intermediateData len: %v\n", len(intermediateData))
-		if len(intermediateData) > 0 {
-			fmt.Printf("intermediateData[0]: %v\n", intermediateData[0])
-		}
-
-		intermediateDataMap := make(map[int][]KeyValue)
-		AssignKvToReducer(intermediateData, intermediateDataMap, replyAskTask.ReduceTasksCnt)
-		// intermediate files is mr-X-Y, where X is the Map task number,
-		// and Y is the reduce task number.
-		for iReduce, kvList := range intermediateDataMap {
-			intermediateFilename := "mr-" + strconv.Itoa(task.TaskId) + "-" + strconv.Itoa(iReduce)
-			WriteIntermediateDataToFile(kvList, intermediateFilename)
-
-		}
+	// if it's a map task
+	if task.TaskType == 1 {
+		fmt.Println("Processing map task...")
+		processMapTask(task, replyAskTask.ReduceTasksCnt, mapf)
 	}
 
 }
@@ -153,5 +133,33 @@ func AssignKvToReducer(intermediateData []KeyValue, intermediateDataMap map[int]
 			intermediateDataMap[iReduce] = make([]KeyValue, 0)
 		}
 		intermediateDataMap[iReduce] = append(intermediateDataMap[iReduce], kv)
+	}
+}
+
+func processMapTask(task Task, reduceTasksCnt int, mapf func(string, string) []KeyValue) {
+	if len(task.Inputfiles) > 0 {
+		inputFilename := task.Inputfiles[0]
+		content := ReadFile(inputFilename)
+		n := len(content)
+		if len(content) > 10 {
+			n = 10
+		}
+		fmt.Printf("Content: %v...\n", content[:n])
+		fmt.Printf("Content len: %v\n", len(content))
+		intermediateData := mapf(inputFilename, content)
+		fmt.Printf("intermediateData len: %v\n", len(intermediateData))
+		if len(intermediateData) > 0 {
+			fmt.Printf("intermediateData[0]: %v\n", intermediateData[0])
+		}
+
+		intermediateDataMap := make(map[int][]KeyValue)
+		AssignKvToReducer(intermediateData, intermediateDataMap, reduceTasksCnt)
+		// intermediate files is mr-X-Y, where X is the Map task number,
+		// and Y is the reduce task number.
+		for iReduce, kvList := range intermediateDataMap {
+			intermediateFilename := "mr-" + strconv.Itoa(task.TaskId) + "-" + strconv.Itoa(iReduce)
+			WriteIntermediateDataToFile(kvList, intermediateFilename)
+
+		}
 	}
 }
