@@ -10,6 +10,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"time"
 )
 
 //
@@ -48,10 +49,27 @@ func Worker(mapf func(string, string) []KeyValue,
 	replyRegister := RegisterWorkerReply{}
 	callRegisterWorker(&argsRegister, &replyRegister)
 
-	argsAskTask := AskTaskArgs{WorkerId: string(replyRegister.WorkerId)}
-	replyAskTask := AskTaskReply{}
-	callAskTask(&argsAskTask, &replyAskTask)
+	for {
+		ok := askAndProcessTask(replyRegister.WorkerId, mapf, reducef)
+		if !ok {
+			fmt.Println("Something is wrong when contacting the coordinator, exit.")
+			break
+		}
+		// sleep for 0.5s and ask again
+		fmt.Println("sleep for 0.5s and ask again.")
+		time.Sleep(500 * time.Millisecond)
+	}
 
+}
+
+func askAndProcessTask(workerId string, mapf func(string, string) []KeyValue,
+	reducef func(string, []string) string) bool {
+	argsAskTask := AskTaskArgs{WorkerId: string(workerId)}
+	replyAskTask := AskTaskReply{}
+	ok := callAskTask(&argsAskTask, &replyAskTask)
+	if !ok {
+		return false
+	}
 	task := replyAskTask.T
 
 	// if it's a map task
@@ -61,42 +79,36 @@ func Worker(mapf func(string, string) []KeyValue,
 		reportTaskComplete(task)
 	} else if task.TaskType == 2 {
 		fmt.Println("Processing reduce task...")
-
 		// if it's a reduce task
-		// 1. read all the intermediate data files
-		mergeIntermediateData := readIntermediateFiles(task.Inputfiles)
-		// 2. sort them by key
-		sort.Sort(ByKey(mergeIntermediateData))
-		// 3. call reducef on each distinct key in aggregated sorted intermediate data
-		result := applyReducef(reducef, mergeIntermediateData)
-		// 4. print the result to file mr-out-Y, where Y is the reduce task id
-		outputFilename := fmt.Sprintf("mr-out-%v", task.TaskId)
-		writeOutputFile(result, outputFilename)
+		processReduceTask(task, reducef)
 		reportTaskComplete(task)
 	}
-
+	return true
 }
 
-func reportTaskComplete(task Task) {
+func reportTaskComplete(task Task) bool {
 	argsReportTaskStatus := ReportTaskStatusArgs{T: task, Status: "Completed"}
 	replyReportTaskStatus := ReportTaskStatusReply{}
-	callReportTaskStatus(&argsReportTaskStatus, &replyReportTaskStatus)
+	return callReportTaskStatus(&argsReportTaskStatus, &replyReportTaskStatus)
 }
 
-func callRegisterWorker(args *RegisterWorkerArgs, reply *RegisterWorkerReply) {
+func callRegisterWorker(args *RegisterWorkerArgs, reply *RegisterWorkerReply) bool {
 
-	call("Coordinator.RegisterWorker", args, reply)
+	ok := call("Coordinator.RegisterWorker", args, reply)
 	fmt.Printf("CallRegisterWorker - reply.workerId: %v\n", reply.WorkerId)
+	return ok
 }
 
-func callAskTask(args *AskTaskArgs, reply *AskTaskReply) {
-	call("Coordinator.AskTask", args, reply)
+func callAskTask(args *AskTaskArgs, reply *AskTaskReply) bool {
+	ok := call("Coordinator.AskTask", args, reply)
 	fmt.Printf("CallAskTask - reply.T: %v\n", reply.T)
+	return ok
 }
 
-func callReportTaskStatus(args *ReportTaskStatusArgs, reply *ReportTaskStatusReply) {
+func callReportTaskStatus(args *ReportTaskStatusArgs, reply *ReportTaskStatusReply) bool {
 	fmt.Println("Calling ReportTaskStatus")
-	call("Coordinator.ReportTaskStatus", args, reply)
+	ok := call("Coordinator.ReportTaskStatus", args, reply)
+	return ok
 }
 
 //
@@ -235,4 +247,16 @@ func writeOutputFile(outputData []KeyValue, outputFilename string) {
 		fmt.Fprintf(ofile, "%v %v\n", data.Key, data.Value)
 	}
 	ofile.Close()
+}
+
+func processReduceTask(task Task, reducef func(string, []string) string) {
+	// 1. read all the intermediate data files
+	mergeIntermediateData := readIntermediateFiles(task.Inputfiles)
+	// 2. sort them by key
+	sort.Sort(ByKey(mergeIntermediateData))
+	// 3. call reducef on each distinct key in aggregated sorted intermediate data
+	result := applyReducef(reducef, mergeIntermediateData)
+	// 4. print the result to file mr-out-Y, where Y is the reduce task id
+	outputFilename := fmt.Sprintf("mr-out-%v", task.TaskId)
+	writeOutputFile(result, outputFilename)
 }
