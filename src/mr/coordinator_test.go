@@ -34,7 +34,7 @@ func TestRegisterWorkerRpc(t *testing.T) {
 
 func TestAskTaskRpc(t *testing.T) {
 	c := Coordinator{inputfiles: []string{"file1", "file2"}, reduceTasksCnt: 10}
-	c.initializeTasks()
+	c.initializeMapTasks()
 	args := AskTaskArgs{WorkerId: "2"}
 	var reply AskTaskReply
 
@@ -45,11 +45,15 @@ func TestAskTaskRpc(t *testing.T) {
 	assert.Equal(t, []string{"file1"}, reply.T.Inputfiles)
 	assert.Equal(t, 10, reply.ReduceTasksCnt)
 
+	// assert task status is 2 (in progress)
+	status, ok := c.checkTaskStatus(reply.T)
+	assert.True(t, ok)
+	assert.Equal(t, 2, status)
 }
 
-func TestInitializeTasks(t *testing.T) {
+func TestInitializeMapTasks(t *testing.T) {
 	c := Coordinator{inputfiles: []string{"file1", "file2"}}
-	c.initializeTasks()
+	c.initializeMapTasks()
 	status, ok := c.checkTaskStatus(Task{TaskType: 1})
 	assert.False(t, ok)
 	assert.Equal(t, status, 0)
@@ -62,12 +66,36 @@ func TestInitializeTasks(t *testing.T) {
 	assert.False(t, ok)
 	assert.Equal(t, status, 0)
 
+	// assert task status is 1 (idle)
 	status, ok = c.checkTaskStatus(Task{TaskType: 1, Inputfiles: []string{"file1"}, TaskId: 0})
 	assert.True(t, ok)
-	assert.Equal(t, status, 1)
+	assert.Equal(t, 1, status)
 
 	status, ok = c.checkTaskStatus(Task{TaskType: 1, Inputfiles: []string{"file2"}, TaskId: 1})
 	assert.True(t, ok)
-	assert.Equal(t, status, 1)
+	assert.Equal(t, 1, status)
+
+}
+
+func TestReportTaskStatusRpc(t *testing.T) {
+	c := Coordinator{inputfiles: []string{"file1", "file2"}, reduceTasksCnt: 10}
+	c.initializeMapTasks()
+	assert.Equal(t, int32(2), c.getRemainingMapTasksCnt())
+	assert.Equal(t, int32(-1), c.getRemainingReduceTasksCnt())
+
+	mapTask := Task{TaskType: 1, Inputfiles: []string{"file1"}, TaskId: 0}
+	arg := ReportTaskStatusArgs{T: mapTask, Status: "Completed"}
+	var reply ReportTaskStatusReply
+	err := c.ReportTaskStatus(&arg, &reply)
+
+	assert.NoError(t, err)
+	assert.Equal(t, int32(1), c.getRemainingMapTasksCnt())
+
+	reduceTask := Task{TaskType: 2, Inputfiles: []string{"reduceFile"}, TaskId: 0}
+	arg = ReportTaskStatusArgs{T: reduceTask, Status: "Completed"}
+	reply = ReportTaskStatusReply{}
+	err = c.ReportTaskStatus(&arg, &reply)
+	assert.NoError(t, err)
+	assert.Equal(t, int32(-2), c.getRemainingReduceTasksCnt())
 
 }

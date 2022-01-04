@@ -46,16 +46,21 @@ type SafeStatusMap struct {
 var taskStatusMap SafeStatusMap = SafeStatusMap{m: make(map[string]int)}
 var idleTasksQueue chan Task = make(chan Task, 100)
 
-// gives each input file to a map task
-func (c *Coordinator) initializeTasks() {
+// atomic interger
+var remainingMapTasksCnt int32
+var remainingReduceTasksCnt int32
 
+// gives each input file to a map task
+func (c *Coordinator) initializeMapTasks() {
+	atomic.StoreInt32(&remainingMapTasksCnt, int32(len(c.inputfiles)))
+	atomic.StoreInt32(&remainingReduceTasksCnt, -1)
 	for i, file := range c.inputfiles {
 		t := Task{TaskType: 1, Inputfiles: []string{file}, TaskId: i}
 		fmt.Printf("Initializing task: %v\n", t)
 		taskStatusMap.mu.Lock()
 		taskStatusMap.m[t.toString()] = 1
 		taskStatusMap.mu.Unlock()
-		// TODO: what if queue is full?
+		// if queue is full, it will block until there is some consumer complete some tasks
 		idleTasksQueue <- t
 	}
 	fmt.Printf("Queue Len: %d\n", len(idleTasksQueue))
@@ -95,7 +100,40 @@ func (c *Coordinator) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
 	fmt.Printf("Task: %v\n", t)
 	reply.T = t
 	reply.ReduceTasksCnt = c.reduceTasksCnt
+	// mark the task as in progress
+	taskStatusMap.mu.Lock()
+	taskStatusMap.m[t.toString()] = 2
+	taskStatusMap.mu.Unlock()
 	return nil
+}
+
+func (c *Coordinator) ReportTaskStatus(args *ReportTaskStatusArgs, reply *ReportTaskStatusReply) error {
+	task := args.T
+	if task.TaskType == 1 && args.Status == "Completed" {
+		atomic.AddInt32(&remainingMapTasksCnt, -1)
+	} else if task.TaskType == 2 && args.Status == "Completed" {
+		atomic.AddInt32(&remainingReduceTasksCnt, -1)
+	}
+	// mark the task as completed
+	taskStatusMap.mu.Lock()
+	taskStatusMap.m[task.toString()] = 3
+	taskStatusMap.mu.Unlock()
+	if c.getRemainingMapTasksCnt() == 0 {
+		c.initializeReduceTasks()
+	}
+	return nil
+}
+
+func (c *Coordinator) getRemainingMapTasksCnt() int32 {
+	return atomic.LoadInt32(&remainingMapTasksCnt)
+}
+
+func (c *Coordinator) getRemainingReduceTasksCnt() int32 {
+	return atomic.LoadInt32(&remainingReduceTasksCnt)
+}
+
+func (c *Coordinator) initializeReduceTasks() {
+	// TODO
 }
 
 //
@@ -123,6 +161,10 @@ func (c *Coordinator) Done() bool {
 
 	// TODO: Your code here.
 
+	if atomic.LoadInt32(&remainingMapTasksCnt) == 0 && atomic.LoadInt32(&remainingReduceTasksCnt) == 0 {
+		ret = true
+	}
+
 	return ret
 }
 
@@ -133,7 +175,7 @@ func (c *Coordinator) Done() bool {
 //
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{inputfiles: files, reduceTasksCnt: nReduce}
-	c.initializeTasks()
+	c.initializeMapTasks()
 
 	c.server()
 	return &c

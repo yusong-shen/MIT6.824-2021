@@ -49,6 +49,9 @@ func Worker(mapf func(string, string) []KeyValue,
 	if task.TaskType == 1 {
 		fmt.Println("Processing map task...")
 		processMapTask(task, replyAskTask.ReduceTasksCnt, mapf)
+		argsReportTaskStatus := ReportTaskStatusArgs{T: task, Status: "Completed"}
+		replyReportTaskStatus := ReportTaskStatusReply{}
+		CallReportTaskStatus(&argsReportTaskStatus, &replyReportTaskStatus)
 	}
 
 }
@@ -62,6 +65,11 @@ func CallRegisterWorker(args *RegisterWorkerArgs, reply *RegisterWorkerReply) {
 func CallAskTask(args *AskTaskArgs, reply *AskTaskReply) {
 	call("Coordinator.AskTask", args, reply)
 	fmt.Printf("CallAskTask - reply.T: %v\n", reply.T)
+}
+
+func CallReportTaskStatus(args *ReportTaskStatusArgs, reply *ReportTaskStatusReply) {
+	fmt.Println("Calling ReportTaskStatus")
+	call("Coordinator.ReportTaskStatus", args, reply)
 }
 
 //
