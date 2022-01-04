@@ -8,7 +8,7 @@ import (
 )
 
 func TestRegisterWorkerRpc(t *testing.T) {
-	c := Coordinator{}
+	c := NewCoordinator([]string{}, 0)
 	args := RegisterWorkerArgs{}
 	var reply RegisterWorkerReply
 
@@ -33,7 +33,7 @@ func TestRegisterWorkerRpc(t *testing.T) {
 }
 
 func TestAskTaskRpc(t *testing.T) {
-	c := Coordinator{inputfiles: []string{"file1", "file2"}, reduceTasksCnt: 10}
+	c := NewCoordinator([]string{"file1", "file2"}, 10)
 	c.initializeMapTasks()
 	args := AskTaskArgs{WorkerId: "2"}
 	var reply AskTaskReply
@@ -52,7 +52,7 @@ func TestAskTaskRpc(t *testing.T) {
 }
 
 func TestAskTaskRpc_NotIdleMapTask(t *testing.T) {
-	c := Coordinator{inputfiles: []string{"file1"}, reduceTasksCnt: 10}
+	c := NewCoordinator([]string{"file1"}, 10)
 	c.initializeMapTasks()
 	args := AskTaskArgs{WorkerId: "2"}
 	var reply AskTaskReply
@@ -72,7 +72,7 @@ func TestAskTaskRpc_NotIdleMapTask(t *testing.T) {
 }
 
 func TestInitializeMapTasks(t *testing.T) {
-	c := Coordinator{inputfiles: []string{"file1", "file2"}}
+	c := NewCoordinator([]string{"file1", "file2"}, 0)
 	c.initializeMapTasks()
 	status, ok := c.checkTaskStatus(Task{TaskType: 1})
 	assert.False(t, ok)
@@ -98,7 +98,7 @@ func TestInitializeMapTasks(t *testing.T) {
 }
 
 func TestReportTaskStatusRpc(t *testing.T) {
-	c := Coordinator{inputfiles: []string{"file1", "file2"}, reduceTasksCnt: 10}
+	c := NewCoordinator([]string{"file1", "file2"}, 10)
 	c.initializeMapTasks()
 	assert.Equal(t, int32(2), c.getRemainingMapTasksCnt())
 	assert.Equal(t, int32(-1), c.getRemainingReduceTasksCnt())
@@ -120,13 +120,13 @@ func TestReportTaskStatusRpc(t *testing.T) {
 }
 
 func TestGetReducerInputFiles(t *testing.T) {
-	c := Coordinator{inputfiles: []string{"file1", "file2"}, reduceTasksCnt: 10}
+	c := NewCoordinator([]string{"file1", "file2"}, 10)
 	reduceInputFiles := c.getReducerInputFiles(2)
 	assert.Equal(t, []string{"mr-0-2", "mr-1-2"}, reduceInputFiles)
 }
 
 func TestInitializeReduceTasks(t *testing.T) {
-	c := Coordinator{inputfiles: []string{"file1", "file2"}, reduceTasksCnt: 3}
+	c := NewCoordinator([]string{"file1", "file2"}, 3)
 	c.initializeReduceTasks()
 	status, ok := c.checkTaskStatus(Task{TaskType: 2, Inputfiles: []string{"mr-0-0", "mr-1-0"}, TaskId: 0})
 	assert.True(t, ok)
@@ -142,7 +142,7 @@ func TestInitializeReduceTasks(t *testing.T) {
 }
 
 func TestAskTaskRpc_AllMapTasksComplete_ShouldGetReduceTask(t *testing.T) {
-	c := Coordinator{inputfiles: []string{"file1"}, reduceTasksCnt: 2}
+	c := NewCoordinator([]string{"file1"}, 2)
 	c.initializeMapTasks()
 	argsAskTask := AskTaskArgs{WorkerId: "2"}
 	replyAskTask := AskTaskReply{}
@@ -178,7 +178,7 @@ func TestAskTaskRpc_AllMapTasksComplete_ShouldGetReduceTask(t *testing.T) {
 }
 
 func TestDone(t *testing.T) {
-	c := Coordinator{inputfiles: []string{"file1"}, reduceTasksCnt: 1}
+	c := NewCoordinator([]string{"file1"}, 1)
 	c.initializeMapTasks()
 	argsAskTask := AskTaskArgs{WorkerId: "2"}
 	replyAskTask := AskTaskReply{}
