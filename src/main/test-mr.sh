@@ -37,7 +37,8 @@ failed_any=0
 # 4: job count test
 # 5: early exit test
 # 6: crash test
-enabled_tests=(true true false false false false false)
+enabled_tests=(true true true true true false false)
+# enabled_tests=(false false false false false true true)
 # enabled_tests=(true true true true true true true)
 
 #########################################################

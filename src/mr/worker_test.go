@@ -11,7 +11,9 @@ import (
 )
 
 func TestReadFile(t *testing.T) {
-	content := readFile("testInput.txt")
+	content, err := readFile("testInput.txt")
+	assert.NoError(t, err)
+
 	fmt.Println(content)
 	expected := "testline word123\nalice 234 bob\ncharlie"
 	assert.Equal(t, expected, content)
@@ -25,7 +27,8 @@ func TestWriteIntermediateDataToFile(t *testing.T) {
 	data := []KeyValue{{Key: "k1", Value: "v1"}, {Key: "k2", Value: "v2"}}
 	writeIntermediateDataToFile(data, "temp.json")
 
-	output := readJsonData("temp.json")
+	output, err := readJsonData("temp.json")
+	assert.NoError(t, err)
 	assert.ElementsMatch(t, data, output)
 
 	os.Remove("temp.json")
@@ -75,7 +78,8 @@ func TestWriteOutputfile(t *testing.T) {
 	data := []KeyValue{{Key: "k1", Value: "2"}, {Key: "k2", Value: "1"}}
 	writeOutputFile(data, filename)
 
-	content := readFile(filename)
+	content, err := readFile(filename)
+	assert.NoError(t, err)
 	expected := "k1 2\nk2 1\n"
 	assert.Equal(t, expected, content)
 

@@ -53,14 +53,14 @@ func (c *Coordinator) initializeMapTasks() {
 	atomic.StoreInt32(&c.remainingMapTasksCnt, int32(len(c.inputfiles)))
 	for i, file := range c.inputfiles {
 		t := Task{TaskType: 1, Inputfiles: []string{file}, TaskId: i}
-		fmt.Printf("Initializing map task: %v\n", t)
+		log.Printf("Initializing map task: %v\n", t)
 		c.taskStatusMap.mu.Lock()
 		c.taskStatusMap.m[t.toString()] = 1
 		c.taskStatusMap.mu.Unlock()
 		// if queue is full, it will block until there is some consumer complete some tasks
 		c.idleMapTasksQueue <- t
 	}
-	fmt.Printf("IdleMapTaskQueue Len: %d\n", len(c.idleMapTasksQueue))
+	log.Printf("IdleMapTaskQueue Len: %d\n", len(c.idleMapTasksQueue))
 
 }
 
@@ -91,7 +91,7 @@ func (c *Coordinator) checkWorkerStatus(workerId string) bool {
 }
 
 func (c *Coordinator) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
-	fmt.Printf("WorkerId : %v\n", args.WorkerId)
+	log.Printf("WorkerId : %v\n", args.WorkerId)
 	// TODO: len(c.idleMapTasksQueue) may not be safe
 	if len(c.idleMapTasksQueue) == 0 && c.getRemainingMapTasksCnt() != 0 {
 		// return empty reply without any task since there is not idle map task
@@ -102,8 +102,8 @@ func (c *Coordinator) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
 	// assign idle map task when available
 	if len(c.idleMapTasksQueue) != 0 {
 		t := <-c.idleMapTasksQueue
-		fmt.Printf("Assign Map Task: %v\n", t)
-		fmt.Printf("idleMapTasksQueue len: %d\n", len(c.idleMapTasksQueue))
+		log.Printf("Assign Map Task: %v\n", t)
+		log.Printf("idleMapTasksQueue len: %d\n", len(c.idleMapTasksQueue))
 		reply.T = t
 		reply.ReduceTasksCnt = c.reduceTasksCnt
 		// mark the task as in progress
@@ -115,8 +115,8 @@ func (c *Coordinator) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
 	// assign reduce task when available
 	if len(c.idleReduceTaskQueue) != 0 {
 		t := <-c.idleReduceTaskQueue
-		fmt.Printf("Assign Reduce Task: %v\n", t)
-		fmt.Printf("idleReduceTaskQueue len: %d\n", len(c.idleReduceTaskQueue))
+		log.Printf("Assign Reduce Task: %v\n", t)
+		log.Printf("idleReduceTaskQueue len: %d\n", len(c.idleReduceTaskQueue))
 		reply.T = t
 		reply.ReduceTasksCnt = c.reduceTasksCnt
 		// mark the task as in progress
@@ -163,13 +163,13 @@ func (c *Coordinator) initializeReduceTasks() {
 	for i := 0; i < c.reduceTasksCnt; i++ {
 		task := Task{TaskType: 2, Inputfiles: c.getReducerInputFiles(i), TaskId: i}
 		// update the task status map
-		fmt.Printf("Initializing reduce task: %v\n", task)
+		log.Printf("Initializing reduce task: %v\n", task)
 		c.taskStatusMap.mu.Lock()
 		c.taskStatusMap.m[task.toString()] = 1
 		c.taskStatusMap.mu.Unlock()
 		c.idleReduceTaskQueue <- task
 	}
-	fmt.Printf("IdleReduceTaskQueue Len: %d\n", len(c.idleReduceTaskQueue))
+	log.Printf("IdleReduceTaskQueue Len: %d\n", len(c.idleReduceTaskQueue))
 
 }
 

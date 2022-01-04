@@ -9,7 +9,6 @@ import (
 	"net/rpc"
 	"os"
 	"sort"
-	"strconv"
 	"time"
 )
 
@@ -52,11 +51,11 @@ func Worker(mapf func(string, string) []KeyValue,
 	for {
 		ok := askAndProcessTask(replyRegister.WorkerId, mapf, reducef)
 		if !ok {
-			fmt.Println("Something is wrong when contacting the coordinator, exit.")
+			log.Println("Something is wrong when contacting the coordinator, exit.")
 			break
 		}
 		// sleep for 0.5s and ask again
-		fmt.Println("sleep for 0.5s and ask again.")
+		log.Println("sleep for 0.5s and ask again.")
 		time.Sleep(500 * time.Millisecond)
 	}
 
@@ -74,11 +73,11 @@ func askAndProcessTask(workerId string, mapf func(string, string) []KeyValue,
 
 	// if it's a map task
 	if task.TaskType == 1 {
-		fmt.Println("Processing map task...")
+		log.Println("Processing map task...")
 		processMapTask(task, replyAskTask.ReduceTasksCnt, mapf)
 		reportTaskComplete(task)
 	} else if task.TaskType == 2 {
-		fmt.Println("Processing reduce task...")
+		log.Println("Processing reduce task...")
 		// if it's a reduce task
 		processReduceTask(task, reducef)
 		reportTaskComplete(task)
@@ -95,18 +94,18 @@ func reportTaskComplete(task Task) bool {
 func callRegisterWorker(args *RegisterWorkerArgs, reply *RegisterWorkerReply) bool {
 
 	ok := call("Coordinator.RegisterWorker", args, reply)
-	fmt.Printf("CallRegisterWorker - reply.workerId: %v\n", reply.WorkerId)
+	log.Printf("CallRegisterWorker - reply.workerId: %v\n", reply.WorkerId)
 	return ok
 }
 
 func callAskTask(args *AskTaskArgs, reply *AskTaskReply) bool {
 	ok := call("Coordinator.AskTask", args, reply)
-	fmt.Printf("CallAskTask - reply.T: %v\n", reply.T)
+	log.Printf("CallAskTask - reply.T: %v\n", reply.T)
 	return ok
 }
 
 func callReportTaskStatus(args *ReportTaskStatusArgs, reply *ReportTaskStatusReply) bool {
-	fmt.Println("Calling ReportTaskStatus")
+	log.Println("Calling ReportTaskStatus")
 	ok := call("Coordinator.ReportTaskStatus", args, reply)
 	return ok
 }
@@ -130,46 +129,50 @@ func call(rpcname string, args interface{}, reply interface{}) bool {
 		return true
 	}
 
-	fmt.Printf("Error: %v\n", err)
+	log.Printf("Error: %v\n", err)
 	return false
 }
 
-func readFile(filename string) string {
-	fmt.Printf("Reading file: %v\n", filename)
+func readFile(filename string) (string, error) {
+	log.Printf("Reading file: %v\n", filename)
 	file, err := os.Open(filename)
 	if err != nil {
-		log.Fatalf("cannot open %v", filename)
+		log.Printf("Error: cannot open %v\n", filename)
+		return "", err
 	}
 	content, err := ioutil.ReadAll(file)
 	if err != nil {
-		log.Fatalf("cannot read %v", filename)
+		log.Printf("Error: cannot read %v\n", filename)
+		return "", err
 	}
 	file.Close()
-	return string(content)
+	return string(content), nil
 }
 
 func writeIntermediateDataToFile(intermediateData []KeyValue, filename string) {
 	file, err := json.MarshalIndent(intermediateData, "", " ")
 	if err != nil {
-		log.Fatalf("Error: %v\n", err)
+		log.Printf("Error: %v\n", err)
 	}
 	err = ioutil.WriteFile(filename, file, 0644)
 	if err != nil {
-		log.Fatalf("Error write to file: %v\n", err)
+		log.Printf("Error write to file: %v\n", err)
 	}
 }
 
-func readJsonData(filename string) []KeyValue {
+func readJsonData(filename string) ([]KeyValue, error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
-		log.Fatalf("Error: %v\n", err)
+		log.Printf("Error: %v\n", err)
+		return nil, err
 	}
 	var kvList []KeyValue
 	err = json.Unmarshal(data, &kvList)
 	if err != nil {
-		log.Fatalf("Error: %v\n", err)
+		log.Printf("Error: %v\n", err)
+		return nil, err
 	}
-	return kvList
+	return kvList, nil
 
 }
 
@@ -186,17 +189,20 @@ func assignKvToReducer(intermediateData []KeyValue, intermediateDataMap map[int]
 func processMapTask(task Task, reduceTasksCnt int, mapf func(string, string) []KeyValue) {
 	if len(task.Inputfiles) > 0 {
 		inputFilename := task.Inputfiles[0]
-		content := readFile(inputFilename)
+		content, err := readFile(inputFilename)
+		if err != nil {
+			log.Print("processMapTask - reading input file error", err)
+		}
 		n := len(content)
 		if len(content) > 10 {
 			n = 10
 		}
-		fmt.Printf("Content: %v...\n", content[:n])
-		fmt.Printf("Content len: %v\n", len(content))
+		log.Printf("Content: %v...\n", content[:n])
+		log.Printf("Content len: %v\n", len(content))
 		intermediateData := mapf(inputFilename, content)
-		fmt.Printf("intermediateData len: %v\n", len(intermediateData))
+		log.Printf("intermediateData len: %v\n", len(intermediateData))
 		if len(intermediateData) > 0 {
-			fmt.Printf("intermediateData[0]: %v\n", intermediateData[0])
+			log.Printf("intermediateData[0]: %v\n", intermediateData[0])
 		}
 
 		intermediateDataMap := make(map[int][]KeyValue)
@@ -204,9 +210,10 @@ func processMapTask(task Task, reduceTasksCnt int, mapf func(string, string) []K
 		// intermediate files is mr-X-Y, where X is the Map task number,
 		// and Y is the reduce task number.
 		for iReduce, kvList := range intermediateDataMap {
-			intermediateFilename := "mr-" + strconv.Itoa(task.TaskId) + "-" + strconv.Itoa(iReduce)
+			// intermediateFilename := "mr-" + strconv.Itoa(task.TaskId) + "-" + strconv.Itoa(iReduce)
+			intermediateFilename := fmt.Sprintf("mr-%v-%v", task.TaskId, iReduce)
+			log.Printf("Writing intermediate file: %v\n", intermediateFilename)
 			writeIntermediateDataToFile(kvList, intermediateFilename)
-
 		}
 	}
 }
@@ -214,7 +221,12 @@ func processMapTask(task Task, reduceTasksCnt int, mapf func(string, string) []K
 func readIntermediateFiles(intermediateFilenames []string) []KeyValue {
 	mergedData := make([]KeyValue, 0)
 	for _, filename := range intermediateFilenames {
-		mergedData = append(mergedData, readJsonData(filename)...)
+		data, err := readJsonData(filename)
+		if err == nil {
+			mergedData = append(mergedData, data...)
+		} else {
+			log.Printf("Skip reading file: %v", filename)
+		}
 	}
 	return mergedData
 }
