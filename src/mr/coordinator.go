@@ -229,6 +229,9 @@ func NewCoordinator(files []string, nReduce int) *Coordinator {
 }
 
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
+	// // disable log
+	// log.SetOutput(ioutil.Discard)
+	// log.SetFlags(0)
 	c := NewCoordinator(files, nReduce)
 	c.initializeMapTasks()
 

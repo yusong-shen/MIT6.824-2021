@@ -46,6 +46,8 @@ enabled_tests=(true true true true true false false)
 
 if ${enabled_tests[0]}
 then
+  now=$(date +"%T")
+  echo "Current time : $now"
   # generate the correct output
   ../mrsequential ../../mrapps/wc.so ../pg*txt || exit 1
   sort mr-out-0 > mr-correct-wc.txt
@@ -87,6 +89,8 @@ fi
 # now indexer
 if ${enabled_tests[1]}
 then
+  now=$(date +"%T")
+  echo "Current time : $now"
   rm -f mr-*
 
   # generate the correct output
@@ -119,6 +123,8 @@ fi
 #########################################################
 if ${enabled_tests[2]}
 then
+  now=$(date +"%T")
+  echo "Current time : $now"
   echo '***' Starting map parallelism test.
 
   rm -f mr-*
@@ -152,6 +158,8 @@ fi
 #########################################################
 if ${enabled_tests[3]}
 then
+  now=$(date +"%T")
+  echo "Current time : $now"
   echo '***' Starting reduce parallelism test.
 
   rm -f mr-*
@@ -178,6 +186,8 @@ fi
 #########################################################
 if ${enabled_tests[4]}
 then
+  now=$(date +"%T")
+  echo "Current time : $now"
   echo '***' Starting job count test.
 
   rm -f mr-*
@@ -206,6 +216,8 @@ fi
 #########################################################
 if ${enabled_tests[5]}
 then
+  now=$(date +"%T")
+  echo "Current time : $now"
   # test whether any worker or coordinator exits before the
   # task has completed (i.e., all output files have been finalized)
   rm -f mr-*
@@ -251,6 +263,8 @@ fi
 #########################################################
 if ${enabled_tests[6]}
 then
+  now=$(date +"%T")
+  echo "Current time : $now"
   echo '***' Starting crash test.
 
   # generate the correct output
@@ -300,6 +314,8 @@ then
   fi
 fi
 #########################################################
+now=$(date +"%T")
+echo "Current time : $now"
 if [ $failed_any -eq 0 ]; then
     echo '***' PASSED ALL TESTS
 else
