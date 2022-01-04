@@ -193,11 +193,6 @@ func processMapTask(task Task, reduceTasksCnt int, mapf func(string, string) []K
 		if err != nil {
 			log.Print("processMapTask - reading input file error", err)
 		}
-		n := len(content)
-		if len(content) > 10 {
-			n = 10
-		}
-		log.Printf("Content: %v...\n", content[:n])
 		log.Printf("Content len: %v\n", len(content))
 		intermediateData := mapf(inputFilename, content)
 		log.Printf("intermediateData len: %v\n", len(intermediateData))
@@ -232,9 +227,11 @@ func readIntermediateFiles(intermediateFilenames []string) []KeyValue {
 }
 
 // call Reduce on each distinct key in intermediateData
-func applyReducef(reducef func(string, []string) string, intermediateData []KeyValue) []KeyValue {
-	result := make([]KeyValue, 0)
+// and print the result to mr-out-Y
+func applyReducefAndWriteOutputfile(reducef func(string, []string) string, intermediateData []KeyValue, outputFilename string) {
 	i := 0
+	ofile, _ := os.Create(outputFilename)
+	defer ofile.Close()
 	for i < len(intermediateData) {
 		j := i + 1
 		for j < len(intermediateData) && intermediateData[j].Key == intermediateData[i].Key {
@@ -244,21 +241,11 @@ func applyReducef(reducef func(string, []string) string, intermediateData []KeyV
 		for k := i; k < j; k++ {
 			values = append(values, intermediateData[k].Value)
 		}
-		output := KeyValue{Key: intermediateData[i].Key, Value: reducef(intermediateData[i].Key, values)}
-		result = append(result, output)
+		value := reducef(intermediateData[i].Key, values)
+		fmt.Fprintf(ofile, "%v %v\n", intermediateData[i].Key, value)
 
 		i = j
 	}
-	return result
-}
-
-// print the result to mr-out-Y
-func writeOutputFile(outputData []KeyValue, outputFilename string) {
-	ofile, _ := os.Create(outputFilename)
-	for _, data := range outputData {
-		fmt.Fprintf(ofile, "%v %v\n", data.Key, data.Value)
-	}
-	ofile.Close()
 }
 
 func processReduceTask(task Task, reducef func(string, []string) string) {
@@ -267,8 +254,7 @@ func processReduceTask(task Task, reducef func(string, []string) string) {
 	// 2. sort them by key
 	sort.Sort(ByKey(mergeIntermediateData))
 	// 3. call reducef on each distinct key in aggregated sorted intermediate data
-	result := applyReducef(reducef, mergeIntermediateData)
 	// 4. print the result to file mr-out-Y, where Y is the reduce task id
 	outputFilename := fmt.Sprintf("mr-out-%v", task.TaskId)
-	writeOutputFile(result, outputFilename)
+	applyReducefAndWriteOutputfile(reducef, mergeIntermediateData, outputFilename)
 }

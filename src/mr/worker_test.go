@@ -63,24 +63,18 @@ func TestSortByKey(t *testing.T) {
 	assert.Equal(t, expected, data)
 }
 
-func TestApplyReducef(t *testing.T) {
+func TestApplyReducefAndWriteOuputfile(t *testing.T) {
 	reducef := func(key string, values []string) string {
 		// return the number of occurrences of this word.
 		return strconv.Itoa(len(values))
 	}
 	data := []KeyValue{{Key: "k1", Value: "v1"}, {Key: "k1", Value: "v3"}, {Key: "k2", Value: "v2"}}
-	result := applyReducef(reducef, data)
-	assert.Equal(t, []KeyValue{{Key: "k1", Value: "2"}, {Key: "k2", Value: "1"}}, result)
-}
 
-func TestWriteOutputfile(t *testing.T) {
 	filename := "testOuput.txt"
-	data := []KeyValue{{Key: "k1", Value: "2"}, {Key: "k2", Value: "1"}}
-	writeOutputFile(data, filename)
+	applyReducefAndWriteOutputfile(reducef, data, filename)
 
 	content, err := readFile(filename)
 	assert.NoError(t, err)
 	expected := "k1 2\nk2 1\n"
 	assert.Equal(t, expected, content)
-
 }
