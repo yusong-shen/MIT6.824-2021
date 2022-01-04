@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/rpc"
 	"os"
+	"sort"
 	"strconv"
 )
 
@@ -18,6 +19,14 @@ type KeyValue struct {
 	Key   string
 	Value string
 }
+
+// for sorting by key.
+type ByKey []KeyValue
+
+// for sorting by key.
+func (a ByKey) Len() int           { return len(a) }
+func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 //
 // use ihash(key) % NReduce to choose the reduce
@@ -37,11 +46,11 @@ func Worker(mapf func(string, string) []KeyValue,
 
 	argsRegister := RegisterWorkerArgs{}
 	replyRegister := RegisterWorkerReply{}
-	CallRegisterWorker(&argsRegister, &replyRegister)
+	callRegisterWorker(&argsRegister, &replyRegister)
 
 	argsAskTask := AskTaskArgs{WorkerId: string(replyRegister.WorkerId)}
 	replyAskTask := AskTaskReply{}
-	CallAskTask(&argsAskTask, &replyAskTask)
+	callAskTask(&argsAskTask, &replyAskTask)
 
 	task := replyAskTask.T
 
@@ -49,25 +58,43 @@ func Worker(mapf func(string, string) []KeyValue,
 	if task.TaskType == 1 {
 		fmt.Println("Processing map task...")
 		processMapTask(task, replyAskTask.ReduceTasksCnt, mapf)
-		argsReportTaskStatus := ReportTaskStatusArgs{T: task, Status: "Completed"}
-		replyReportTaskStatus := ReportTaskStatusReply{}
-		CallReportTaskStatus(&argsReportTaskStatus, &replyReportTaskStatus)
+		reportTaskComplete(task)
+	} else if task.TaskType == 2 {
+		fmt.Println("Processing reduce task...")
+
+		// if it's a reduce task
+		// 1. read all the intermediate data files
+		mergeIntermediateData := readIntermediateFiles(task.Inputfiles)
+		// 2. sort them by key
+		sort.Sort(ByKey(mergeIntermediateData))
+		// 3. call reducef on each distinct key in aggregated sorted intermediate data
+		result := applyReducef(reducef, mergeIntermediateData)
+		// 4. print the result to file mr-out-Y, where Y is the reduce task id
+		outputFilename := fmt.Sprintf("mr-out-%v", task.TaskId)
+		writeOutputFile(result, outputFilename)
+		reportTaskComplete(task)
 	}
 
 }
 
-func CallRegisterWorker(args *RegisterWorkerArgs, reply *RegisterWorkerReply) {
+func reportTaskComplete(task Task) {
+	argsReportTaskStatus := ReportTaskStatusArgs{T: task, Status: "Completed"}
+	replyReportTaskStatus := ReportTaskStatusReply{}
+	callReportTaskStatus(&argsReportTaskStatus, &replyReportTaskStatus)
+}
+
+func callRegisterWorker(args *RegisterWorkerArgs, reply *RegisterWorkerReply) {
 
 	call("Coordinator.RegisterWorker", args, reply)
 	fmt.Printf("CallRegisterWorker - reply.workerId: %v\n", reply.WorkerId)
 }
 
-func CallAskTask(args *AskTaskArgs, reply *AskTaskReply) {
+func callAskTask(args *AskTaskArgs, reply *AskTaskReply) {
 	call("Coordinator.AskTask", args, reply)
 	fmt.Printf("CallAskTask - reply.T: %v\n", reply.T)
 }
 
-func CallReportTaskStatus(args *ReportTaskStatusArgs, reply *ReportTaskStatusReply) {
+func callReportTaskStatus(args *ReportTaskStatusArgs, reply *ReportTaskStatusReply) {
 	fmt.Println("Calling ReportTaskStatus")
 	call("Coordinator.ReportTaskStatus", args, reply)
 }
@@ -95,7 +122,7 @@ func call(rpcname string, args interface{}, reply interface{}) bool {
 	return false
 }
 
-func ReadFile(filename string) string {
+func readFile(filename string) string {
 	fmt.Printf("Reading file: %v\n", filename)
 	file, err := os.Open(filename)
 	if err != nil {
@@ -109,7 +136,7 @@ func ReadFile(filename string) string {
 	return string(content)
 }
 
-func WriteIntermediateDataToFile(intermediateData []KeyValue, filename string) {
+func writeIntermediateDataToFile(intermediateData []KeyValue, filename string) {
 	file, err := json.MarshalIndent(intermediateData, "", " ")
 	if err != nil {
 		log.Fatalf("Error: %v\n", err)
@@ -120,7 +147,7 @@ func WriteIntermediateDataToFile(intermediateData []KeyValue, filename string) {
 	}
 }
 
-func ReadJsonData(filename string) []KeyValue {
+func readJsonData(filename string) []KeyValue {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		log.Fatalf("Error: %v\n", err)
@@ -134,7 +161,7 @@ func ReadJsonData(filename string) []KeyValue {
 
 }
 
-func AssignKvToReducer(intermediateData []KeyValue, intermediateDataMap map[int][]KeyValue, reduceTasksCnt int) {
+func assignKvToReducer(intermediateData []KeyValue, intermediateDataMap map[int][]KeyValue, reduceTasksCnt int) {
 	for _, kv := range intermediateData {
 		iReduce := ihash(kv.Key) % reduceTasksCnt
 		if _, exist := intermediateDataMap[iReduce]; !exist {
@@ -147,7 +174,7 @@ func AssignKvToReducer(intermediateData []KeyValue, intermediateDataMap map[int]
 func processMapTask(task Task, reduceTasksCnt int, mapf func(string, string) []KeyValue) {
 	if len(task.Inputfiles) > 0 {
 		inputFilename := task.Inputfiles[0]
-		content := ReadFile(inputFilename)
+		content := readFile(inputFilename)
 		n := len(content)
 		if len(content) > 10 {
 			n = 10
@@ -161,13 +188,51 @@ func processMapTask(task Task, reduceTasksCnt int, mapf func(string, string) []K
 		}
 
 		intermediateDataMap := make(map[int][]KeyValue)
-		AssignKvToReducer(intermediateData, intermediateDataMap, reduceTasksCnt)
+		assignKvToReducer(intermediateData, intermediateDataMap, reduceTasksCnt)
 		// intermediate files is mr-X-Y, where X is the Map task number,
 		// and Y is the reduce task number.
 		for iReduce, kvList := range intermediateDataMap {
 			intermediateFilename := "mr-" + strconv.Itoa(task.TaskId) + "-" + strconv.Itoa(iReduce)
-			WriteIntermediateDataToFile(kvList, intermediateFilename)
+			writeIntermediateDataToFile(kvList, intermediateFilename)
 
 		}
 	}
+}
+
+func readIntermediateFiles(intermediateFilenames []string) []KeyValue {
+	mergedData := make([]KeyValue, 0)
+	for _, filename := range intermediateFilenames {
+		mergedData = append(mergedData, readJsonData(filename)...)
+	}
+	return mergedData
+}
+
+// call Reduce on each distinct key in intermediateData
+func applyReducef(reducef func(string, []string) string, intermediateData []KeyValue) []KeyValue {
+	result := make([]KeyValue, 0)
+	i := 0
+	for i < len(intermediateData) {
+		j := i + 1
+		for j < len(intermediateData) && intermediateData[j].Key == intermediateData[i].Key {
+			j++
+		}
+		values := []string{}
+		for k := i; k < j; k++ {
+			values = append(values, intermediateData[k].Value)
+		}
+		output := KeyValue{Key: intermediateData[i].Key, Value: reducef(intermediateData[i].Key, values)}
+		result = append(result, output)
+
+		i = j
+	}
+	return result
+}
+
+// print the result to mr-out-Y
+func writeOutputFile(outputData []KeyValue, outputFilename string) {
+	ofile, _ := os.Create(outputFilename)
+	for _, data := range outputData {
+		fmt.Fprintf(ofile, "%v %v\n", data.Key, data.Value)
+	}
+	ofile.Close()
 }
