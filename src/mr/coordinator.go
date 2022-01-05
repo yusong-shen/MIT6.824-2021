@@ -28,16 +28,6 @@ type Coordinator struct {
 	remainingReduceTasksCnt int32
 }
 
-type Task struct {
-	TaskType   int // 1-map, 2-reduce
-	Inputfiles []string
-	TaskId     int
-}
-
-func (t Task) toString() string {
-	return fmt.Sprintf("%v", t)
-}
-
 type SafeMap struct {
 	m  map[string]bool
 	mu sync.Mutex
@@ -52,7 +42,7 @@ type SafeStatusMap struct {
 func (c *Coordinator) initializeMapTasks() {
 	atomic.StoreInt32(&c.remainingMapTasksCnt, int32(len(c.inputfiles)))
 	for i, file := range c.inputfiles {
-		t := Task{TaskType: 1, Inputfiles: []string{file}, TaskId: i}
+		t := Task{TaskType: Map, Inputfiles: []string{file}, TaskId: i}
 		log.Printf("Initializing map task: %v\n", t)
 		c.taskStatusMap.mu.Lock()
 		c.taskStatusMap.m[t.toString()] = 1
@@ -130,9 +120,9 @@ func (c *Coordinator) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
 
 func (c *Coordinator) ReportTaskStatus(args *ReportTaskStatusArgs, reply *ReportTaskStatusReply) error {
 	task := args.T
-	if task.TaskType == 1 && args.Status == "Completed" {
+	if task.TaskType == Map && args.Status == Completed {
 		atomic.AddInt32(&c.remainingMapTasksCnt, -1)
-	} else if task.TaskType == 2 && args.Status == "Completed" {
+	} else if task.TaskType == Reduce && args.Status == Completed {
 		atomic.AddInt32(&c.remainingReduceTasksCnt, -1)
 	}
 	// mark the task as completed
@@ -161,7 +151,7 @@ func (c *Coordinator) getRemainingReduceTasksCnt() int32 {
 func (c *Coordinator) initializeReduceTasks() {
 	atomic.StoreInt32(&c.remainingReduceTasksCnt, int32(c.reduceTasksCnt))
 	for i := 0; i < c.reduceTasksCnt; i++ {
-		task := Task{TaskType: 2, Inputfiles: c.getReducerInputFiles(i), TaskId: i}
+		task := Task{TaskType: Reduce, Inputfiles: c.getReducerInputFiles(i), TaskId: i}
 		// update the task status map
 		log.Printf("Initializing reduce task: %v\n", task)
 		c.taskStatusMap.mu.Lock()

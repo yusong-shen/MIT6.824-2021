@@ -30,7 +30,7 @@ type AskTaskReply struct {
 // TODO: change status from string to enum
 type ReportTaskStatusArgs struct {
 	T           Task
-	Status      string
+	Status      TaskStatus
 	OutputFiles []string
 }
 

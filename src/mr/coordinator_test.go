@@ -41,7 +41,7 @@ func TestAskTaskRpc(t *testing.T) {
 	err := c.AskTask(&args, &reply)
 	fmt.Println(reply.T.toString())
 	assert.NoError(t, err)
-	assert.Equal(t, 1, reply.T.TaskType)
+	assert.Equal(t, Map, reply.T.TaskType)
 	assert.Equal(t, []string{"file1"}, reply.T.Inputfiles)
 	assert.Equal(t, 10, reply.ReduceTasksCnt)
 
@@ -74,24 +74,24 @@ func TestAskTaskRpc_NotIdleMapTask(t *testing.T) {
 func TestInitializeMapTasks(t *testing.T) {
 	c := NewCoordinator([]string{"file1", "file2"}, 0)
 	c.initializeMapTasks()
-	status, ok := c.checkTaskStatus(Task{TaskType: 1})
+	status, ok := c.checkTaskStatus(Task{TaskType: Map})
 	assert.False(t, ok)
 	assert.Equal(t, status, 0)
 
-	status, ok = c.checkTaskStatus(Task{TaskType: 1, Inputfiles: []string{"file1", "file2"}})
+	status, ok = c.checkTaskStatus(Task{TaskType: Map, Inputfiles: []string{"file1", "file2"}})
 	assert.False(t, ok)
 	assert.Equal(t, status, 0)
 
-	status, ok = c.checkTaskStatus(Task{TaskType: 2})
+	status, ok = c.checkTaskStatus(Task{TaskType: Reduce})
 	assert.False(t, ok)
 	assert.Equal(t, status, 0)
 
 	// assert task status is 1 (idle)
-	status, ok = c.checkTaskStatus(Task{TaskType: 1, Inputfiles: []string{"file1"}, TaskId: 0})
+	status, ok = c.checkTaskStatus(Task{TaskType: Map, Inputfiles: []string{"file1"}, TaskId: 0})
 	assert.True(t, ok)
 	assert.Equal(t, 1, status)
 
-	status, ok = c.checkTaskStatus(Task{TaskType: 1, Inputfiles: []string{"file2"}, TaskId: 1})
+	status, ok = c.checkTaskStatus(Task{TaskType: Map, Inputfiles: []string{"file2"}, TaskId: 1})
 	assert.True(t, ok)
 	assert.Equal(t, 1, status)
 
@@ -103,16 +103,16 @@ func TestReportTaskStatusRpc(t *testing.T) {
 	assert.Equal(t, int32(2), c.getRemainingMapTasksCnt())
 	assert.Equal(t, int32(-1), c.getRemainingReduceTasksCnt())
 
-	mapTask := Task{TaskType: 1, Inputfiles: []string{"file1"}, TaskId: 0}
-	arg := ReportTaskStatusArgs{T: mapTask, Status: "Completed"}
+	mapTask := Task{TaskType: Map, Inputfiles: []string{"file1"}, TaskId: 0}
+	arg := ReportTaskStatusArgs{T: mapTask, Status: Completed}
 	var reply ReportTaskStatusReply
 	err := c.ReportTaskStatus(&arg, &reply)
 
 	assert.NoError(t, err)
 	assert.Equal(t, int32(1), c.getRemainingMapTasksCnt())
 
-	reduceTask := Task{TaskType: 2, Inputfiles: []string{"reduceFile"}, TaskId: 0}
-	arg = ReportTaskStatusArgs{T: reduceTask, Status: "Completed"}
+	reduceTask := Task{TaskType: Reduce, Inputfiles: []string{"reduceFile"}, TaskId: 0}
+	arg = ReportTaskStatusArgs{T: reduceTask, Status: Completed}
 	reply = ReportTaskStatusReply{}
 	err = c.ReportTaskStatus(&arg, &reply)
 	assert.NoError(t, err)
@@ -128,15 +128,15 @@ func TestGetReducerInputFiles(t *testing.T) {
 func TestInitializeReduceTasks(t *testing.T) {
 	c := NewCoordinator([]string{"file1", "file2"}, 3)
 	c.initializeReduceTasks()
-	status, ok := c.checkTaskStatus(Task{TaskType: 2, Inputfiles: []string{"mr-0-0", "mr-1-0"}, TaskId: 0})
+	status, ok := c.checkTaskStatus(Task{TaskType: Reduce, Inputfiles: []string{"mr-0-0", "mr-1-0"}, TaskId: 0})
 	assert.True(t, ok)
 	assert.Equal(t, 1, status)
 
-	status, ok = c.checkTaskStatus(Task{TaskType: 2, Inputfiles: []string{"mr-0-1", "mr-1-1"}, TaskId: 1})
+	status, ok = c.checkTaskStatus(Task{TaskType: Reduce, Inputfiles: []string{"mr-0-1", "mr-1-1"}, TaskId: 1})
 	assert.True(t, ok)
 	assert.Equal(t, 1, status)
 
-	status, ok = c.checkTaskStatus(Task{TaskType: 2, Inputfiles: []string{"mr-0-2", "mr-1-2"}, TaskId: 2})
+	status, ok = c.checkTaskStatus(Task{TaskType: Reduce, Inputfiles: []string{"mr-0-2", "mr-1-2"}, TaskId: 2})
 	assert.True(t, ok)
 	assert.Equal(t, 1, status)
 }
@@ -154,7 +154,7 @@ func TestAskTaskRpc_AllMapTasksComplete_ShouldGetReduceTask(t *testing.T) {
 	assert.NoError(t, err)
 
 	// complete the task
-	argReportTask := ReportTaskStatusArgs{T: replyAskTask.T, Status: "Completed"}
+	argReportTask := ReportTaskStatusArgs{T: replyAskTask.T, Status: Completed}
 	replyReportTask := ReportTaskStatusReply{}
 	err = c.ReportTaskStatus(&argReportTask, &replyReportTask)
 	assert.NoError(t, err)
@@ -167,7 +167,7 @@ func TestAskTaskRpc_AllMapTasksComplete_ShouldGetReduceTask(t *testing.T) {
 	fmt.Println(replyAskTask.T.toString())
 	assert.NoError(t, err)
 	// assert worker should get reduce task
-	assert.Equal(t, 2, replyAskTask.T.TaskType)
+	assert.Equal(t, Reduce, replyAskTask.T.TaskType)
 	assert.Equal(t, []string{"mr-0-0"}, replyAskTask.T.Inputfiles)
 	assert.Equal(t, 2, replyAskTask.ReduceTasksCnt)
 
@@ -191,7 +191,7 @@ func TestDone(t *testing.T) {
 	assert.False(t, c.Done())
 
 	// complete the map task
-	argReportTask := ReportTaskStatusArgs{T: replyAskTask.T, Status: "Completed"}
+	argReportTask := ReportTaskStatusArgs{T: replyAskTask.T, Status: Completed}
 	replyReportTask := ReportTaskStatusReply{}
 	err = c.ReportTaskStatus(&argReportTask, &replyReportTask)
 	assert.NoError(t, err)
@@ -206,7 +206,7 @@ func TestDone(t *testing.T) {
 	assert.False(t, c.Done())
 
 	// complete the reduce task
-	argReportTask = ReportTaskStatusArgs{T: replyAskTask.T, Status: "Completed"}
+	argReportTask = ReportTaskStatusArgs{T: replyAskTask.T, Status: Completed}
 	replyReportTask = ReportTaskStatusReply{}
 	err = c.ReportTaskStatus(&argReportTask, &replyReportTask)
 	assert.NoError(t, err)

@@ -86,7 +86,7 @@ func askAndProcessTask(workerId string, mapf func(string, string) []KeyValue,
 }
 
 func reportTaskComplete(task Task) bool {
-	argsReportTaskStatus := ReportTaskStatusArgs{T: task, Status: "Completed"}
+	argsReportTaskStatus := ReportTaskStatusArgs{T: task, Status: Completed}
 	replyReportTaskStatus := ReportTaskStatusReply{}
 	return callReportTaskStatus(&argsReportTaskStatus, &replyReportTaskStatus)
 }
