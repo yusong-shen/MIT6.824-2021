@@ -1,8 +1,9 @@
 package mr
 
 import (
-	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	"log"
 	"net"
@@ -24,6 +25,8 @@ type Coordinator struct {
 	// atomic interger
 	remainingMapTasksCnt    int32
 	remainingReduceTasksCnt int32
+	intermediateFiles       map[int][]string
+	intermediateFilesMutex  sync.Mutex
 }
 
 type SafeStatusMap struct {
@@ -98,6 +101,7 @@ func (c *Coordinator) ReportTaskStatus(args *ReportTaskStatusArgs, reply *Report
 	task := args.T
 	if task.TaskType == Map && args.Status == Completed {
 		atomic.AddInt32(&c.remainingMapTasksCnt, -1)
+		c.recordIntermediateFiles(args.OutputFiles)
 	} else if task.TaskType == Reduce && args.Status == Completed {
 		atomic.AddInt32(&c.remainingReduceTasksCnt, -1)
 	}
@@ -116,6 +120,32 @@ func (c *Coordinator) ReportTaskStatus(args *ReportTaskStatusArgs, reply *Report
 	return nil
 }
 
+func (c *Coordinator) recordIntermediateFiles(filenames []string) {
+	c.intermediateFilesMutex.Lock()
+	defer c.intermediateFilesMutex.Unlock()
+	for _, file := range filenames {
+		id := c.getReducerId(file)
+		_, exist := c.intermediateFiles[id]
+		if !exist {
+			c.intermediateFiles[id] = make([]string, 0)
+		}
+		c.intermediateFiles[id] = append(c.intermediateFiles[id], file)
+	}
+}
+
+func (c *Coordinator) getReducerId(filename string) int {
+	lastDash := strings.LastIndex(filename, "-")
+	if lastDash == -1 {
+		return -1
+	}
+	idStr := filename[lastDash+1:]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return -1
+	}
+	return id
+}
+
 func (c *Coordinator) getRemainingMapTasksCnt() int32 {
 	return atomic.LoadInt32(&c.remainingMapTasksCnt)
 }
@@ -125,8 +155,13 @@ func (c *Coordinator) getRemainingReduceTasksCnt() int32 {
 }
 
 func (c *Coordinator) initializeReduceTasks() {
-	atomic.StoreInt32(&c.remainingReduceTasksCnt, int32(c.reduceTasksCnt))
+	atomic.StoreInt32(&c.remainingReduceTasksCnt, 0)
 	for i := 0; i < c.reduceTasksCnt; i++ {
+		inputFiles := c.getReducerInputFiles(i)
+		if len(inputFiles) == 0 {
+			log.Printf("Skip reduce task id=%v, since there is not input file\n", i)
+			continue
+		}
 		task := Task{TaskType: Reduce, Inputfiles: c.getReducerInputFiles(i), TaskId: i}
 		// update the task status map
 		log.Printf("Initializing reduce task: %v\n", task)
@@ -134,20 +169,20 @@ func (c *Coordinator) initializeReduceTasks() {
 		c.taskStatusMap.m[task.toString()] = 1
 		c.taskStatusMap.mu.Unlock()
 		c.idleReduceTaskQueue <- task
+		atomic.AddInt32(&c.remainingReduceTasksCnt, 1)
 	}
 	log.Printf("IdleReduceTaskQueue Len: %d\n", len(c.idleReduceTaskQueue))
 
 }
 
 func (c *Coordinator) getReducerInputFiles(reduceTaskId int) []string {
-	inputFiles := make([]string, 0)
-	// file name looks like mr-X-Y, where X is the Map task number,
-	// and Y is the reduce task number
-	for i := 0; i < len(c.inputfiles); i++ {
-		filename := fmt.Sprintf("mr-%v-%v", i, reduceTaskId)
-		inputFiles = append(inputFiles, filename)
+	c.intermediateFilesMutex.Lock()
+	defer c.intermediateFilesMutex.Unlock()
+	val, exist := c.intermediateFiles[reduceTaskId]
+	if !exist {
+		return make([]string, 0)
 	}
-	return inputFiles
+	return val
 }
 
 //
@@ -190,6 +225,7 @@ func NewCoordinator(files []string, nReduce int) *Coordinator {
 	c.idleMapTasksQueue = make(chan Task, 100)
 	c.idleReduceTaskQueue = make(chan Task, 100)
 	c.remainingReduceTasksCnt = -1
+	c.intermediateFiles = make(map[int][]string)
 	return &c
 }
 

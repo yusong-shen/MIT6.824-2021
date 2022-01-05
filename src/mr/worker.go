@@ -70,19 +70,19 @@ func askAndProcessTask(mapf func(string, string) []KeyValue,
 	// if it's a map task
 	if task.TaskType == 1 {
 		log.Println("Processing map task...")
-		processMapTask(task, replyAskTask.ReduceTasksCnt, mapf)
-		reportTaskComplete(task)
+		filenames := processMapTask(task, replyAskTask.ReduceTasksCnt, mapf)
+		reportTaskComplete(task, filenames)
 	} else if task.TaskType == 2 {
 		log.Println("Processing reduce task...")
 		// if it's a reduce task
-		processReduceTask(task, reducef)
-		reportTaskComplete(task)
+		filename := processReduceTask(task, reducef)
+		reportTaskComplete(task, []string{filename})
 	}
 	return true
 }
 
-func reportTaskComplete(task Task) bool {
-	argsReportTaskStatus := ReportTaskStatusArgs{T: task, Status: Completed}
+func reportTaskComplete(task Task, filenames []string) bool {
+	argsReportTaskStatus := ReportTaskStatusArgs{T: task, Status: Completed, OutputFiles: filenames}
 	replyReportTaskStatus := ReportTaskStatusReply{}
 	return callReportTaskStatus(&argsReportTaskStatus, &replyReportTaskStatus)
 }
@@ -175,7 +175,8 @@ func assignKvToReducer(intermediateData []KeyValue, intermediateDataMap map[int]
 	}
 }
 
-func processMapTask(task Task, reduceTasksCnt int, mapf func(string, string) []KeyValue) {
+func processMapTask(task Task, reduceTasksCnt int, mapf func(string, string) []KeyValue) []string {
+	intermediateFilenames := make([]string, 0)
 	if len(task.Inputfiles) > 0 {
 		inputFilename := task.Inputfiles[0]
 		content, err := readFile(inputFilename)
@@ -196,10 +197,12 @@ func processMapTask(task Task, reduceTasksCnt int, mapf func(string, string) []K
 		for iReduce, kvList := range intermediateDataMap {
 			// intermediateFilename := "mr-" + strconv.Itoa(task.TaskId) + "-" + strconv.Itoa(iReduce)
 			intermediateFilename := fmt.Sprintf("mr-%v-%v", task.TaskId, iReduce)
+			intermediateFilenames = append(intermediateFilenames, intermediateFilename)
 			log.Printf("Writing intermediate file: %v\n", intermediateFilename)
 			writeIntermediateDataToFile(kvList, intermediateFilename)
 		}
 	}
+	return intermediateFilenames
 }
 
 func readIntermediateFiles(intermediateFilenames []string) []KeyValue {
@@ -237,7 +240,7 @@ func applyReducefAndWriteOutputfile(reducef func(string, []string) string, inter
 	}
 }
 
-func processReduceTask(task Task, reducef func(string, []string) string) {
+func processReduceTask(task Task, reducef func(string, []string) string) string {
 	// 1. read all the intermediate data files
 	mergeIntermediateData := readIntermediateFiles(task.Inputfiles)
 	// 2. sort them by key
@@ -246,4 +249,5 @@ func processReduceTask(task Task, reducef func(string, []string) string) {
 	// 4. print the result to file mr-out-Y, where Y is the reduce task id
 	outputFilename := fmt.Sprintf("mr-out-%v", task.TaskId)
 	applyReducefAndWriteOutputfile(reducef, mergeIntermediateData, outputFilename)
+	return outputFilename
 }

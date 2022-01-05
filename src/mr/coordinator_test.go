@@ -94,28 +94,6 @@ func TestReportTaskStatusRpc(t *testing.T) {
 	assert.Equal(t, int32(-2), c.getRemainingReduceTasksCnt())
 }
 
-func TestGetReducerInputFiles(t *testing.T) {
-	c := NewCoordinator([]string{"file1", "file2"}, 10)
-	reduceInputFiles := c.getReducerInputFiles(2)
-	assert.Equal(t, []string{"mr-0-2", "mr-1-2"}, reduceInputFiles)
-}
-
-func TestInitializeReduceTasks(t *testing.T) {
-	c := NewCoordinator([]string{"file1", "file2"}, 3)
-	c.initializeReduceTasks()
-	status, ok := c.checkTaskStatus(Task{TaskType: Reduce, Inputfiles: []string{"mr-0-0", "mr-1-0"}, TaskId: 0})
-	assert.True(t, ok)
-	assert.Equal(t, 1, status)
-
-	status, ok = c.checkTaskStatus(Task{TaskType: Reduce, Inputfiles: []string{"mr-0-1", "mr-1-1"}, TaskId: 1})
-	assert.True(t, ok)
-	assert.Equal(t, 1, status)
-
-	status, ok = c.checkTaskStatus(Task{TaskType: Reduce, Inputfiles: []string{"mr-0-2", "mr-1-2"}, TaskId: 2})
-	assert.True(t, ok)
-	assert.Equal(t, 1, status)
-}
-
 func TestAskTaskRpc_AllMapTasksComplete_ShouldGetReduceTask(t *testing.T) {
 	c := NewCoordinator([]string{"file1"}, 2)
 	c.initializeMapTasks()
@@ -129,7 +107,7 @@ func TestAskTaskRpc_AllMapTasksComplete_ShouldGetReduceTask(t *testing.T) {
 	assert.NoError(t, err)
 
 	// complete the task
-	argReportTask := ReportTaskStatusArgs{T: replyAskTask.T, Status: Completed}
+	argReportTask := ReportTaskStatusArgs{T: replyAskTask.T, Status: Completed, OutputFiles: []string{"mr-0-0"}}
 	replyReportTask := ReportTaskStatusReply{}
 	err = c.ReportTaskStatus(&argReportTask, &replyReportTask)
 	assert.NoError(t, err)
@@ -166,7 +144,7 @@ func TestDone(t *testing.T) {
 	assert.False(t, c.Done())
 
 	// complete the map task
-	argReportTask := ReportTaskStatusArgs{T: replyAskTask.T, Status: Completed}
+	argReportTask := ReportTaskStatusArgs{T: replyAskTask.T, Status: Completed, OutputFiles: []string{"mr-0-0"}}
 	replyReportTask := ReportTaskStatusReply{}
 	err = c.ReportTaskStatus(&argReportTask, &replyReportTask)
 	assert.NoError(t, err)
@@ -189,4 +167,23 @@ func TestDone(t *testing.T) {
 	// act:
 	// assert done should return result as true
 	assert.True(t, c.Done())
+}
+
+func TestGetReducerId(t *testing.T) {
+	tests := []struct {
+		filename string
+		want     int
+	}{
+		{filename: "mr-2-9", want: 9},
+		{filename: "mr-2-9.txt", want: -1},
+		{filename: "mr", want: -1},
+	}
+
+	c := NewCoordinator([]string{"file1"}, 1)
+
+	for _, tc := range tests {
+		if got := c.getReducerId(tc.filename); got != tc.want {
+			t.Errorf("Input filename %v, got reducer id %v, want %v", tc.filename, got, tc.want)
+		}
+	}
 }
