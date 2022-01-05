@@ -7,35 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRegisterWorkerRpc(t *testing.T) {
-	c := NewCoordinator([]string{}, 0)
-	args := RegisterWorkerArgs{}
-	var reply RegisterWorkerReply
-
-	assert.False(t, c.checkWorkerStatus("1"))
-	assert.False(t, c.checkWorkerStatus("2"))
-
-	// register 1st worker
-	err := c.RegisterWorker(&args, &reply)
-	assert.NoError(t, err)
-	assert.Equal(t, "1", reply.WorkerId)
-	c.checkWorkerStatus("1")
-	assert.True(t, c.checkWorkerStatus("1"))
-
-	// register 2nd worker
-	args = RegisterWorkerArgs{}
-	reply = RegisterWorkerReply{}
-	err = c.RegisterWorker(&args, &reply)
-	assert.NoError(t, err)
-	assert.Equal(t, "2", reply.WorkerId)
-	assert.True(t, c.checkWorkerStatus("2"))
-
-}
-
 func TestAskTaskRpc(t *testing.T) {
 	c := NewCoordinator([]string{"file1", "file2"}, 10)
 	c.initializeMapTasks()
-	args := AskTaskArgs{WorkerId: "2"}
+	args := AskTaskArgs{}
 	var reply AskTaskReply
 
 	err := c.AskTask(&args, &reply)
@@ -54,7 +29,7 @@ func TestAskTaskRpc(t *testing.T) {
 func TestAskTaskRpc_NotIdleMapTask(t *testing.T) {
 	c := NewCoordinator([]string{"file1"}, 10)
 	c.initializeMapTasks()
-	args := AskTaskArgs{WorkerId: "2"}
+	args := AskTaskArgs{}
 	var reply AskTaskReply
 
 	// take the only idle map task
@@ -63,7 +38,7 @@ func TestAskTaskRpc_NotIdleMapTask(t *testing.T) {
 	assert.NoError(t, err)
 
 	// ask the task again, should get empty reply
-	args = AskTaskArgs{WorkerId: "2"}
+	args = AskTaskArgs{}
 	reply = AskTaskReply{}
 	err = c.AskTask(&args, &reply)
 	fmt.Println(reply.T.toString())
@@ -144,7 +119,7 @@ func TestInitializeReduceTasks(t *testing.T) {
 func TestAskTaskRpc_AllMapTasksComplete_ShouldGetReduceTask(t *testing.T) {
 	c := NewCoordinator([]string{"file1"}, 2)
 	c.initializeMapTasks()
-	argsAskTask := AskTaskArgs{WorkerId: "2"}
+	argsAskTask := AskTaskArgs{}
 	replyAskTask := AskTaskReply{}
 
 	// set up:
@@ -161,7 +136,7 @@ func TestAskTaskRpc_AllMapTasksComplete_ShouldGetReduceTask(t *testing.T) {
 
 	// act:
 	// now all the map task completed, ask task again
-	argsAskTask = AskTaskArgs{WorkerId: "3"}
+	argsAskTask = AskTaskArgs{}
 	replyAskTask = AskTaskReply{}
 	err = c.AskTask(&argsAskTask, &replyAskTask)
 	fmt.Println(replyAskTask.T.toString())
@@ -180,7 +155,7 @@ func TestAskTaskRpc_AllMapTasksComplete_ShouldGetReduceTask(t *testing.T) {
 func TestDone(t *testing.T) {
 	c := NewCoordinator([]string{"file1"}, 1)
 	c.initializeMapTasks()
-	argsAskTask := AskTaskArgs{WorkerId: "2"}
+	argsAskTask := AskTaskArgs{}
 	replyAskTask := AskTaskReply{}
 
 	// set up:
@@ -198,7 +173,7 @@ func TestDone(t *testing.T) {
 	assert.False(t, c.Done())
 
 	// now all the map task completed, ask reduce task
-	argsAskTask = AskTaskArgs{WorkerId: "3"}
+	argsAskTask = AskTaskArgs{}
 	replyAskTask = AskTaskReply{}
 	err = c.AskTask(&argsAskTask, &replyAskTask)
 	fmt.Println(replyAskTask.T.toString())

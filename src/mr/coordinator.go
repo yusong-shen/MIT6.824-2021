@@ -2,21 +2,19 @@ package mr
 
 import (
 	"fmt"
+	"os"
 
 	"log"
 	"net"
 	"net/http"
 	"net/rpc"
-	"strconv"
 	"sync"
 	"sync/atomic"
 )
 
 type Coordinator struct {
-	inputfiles      []string
-	reduceTasksCnt  int
-	workerCnt       int32
-	workerStatusMap SafeMap
+	inputfiles     []string
+	reduceTasksCnt int
 	// key: string representation of task
 	// value: task status, 1-idle, 2-in progress, 3-completed
 	taskStatusMap           SafeStatusMap
@@ -26,11 +24,6 @@ type Coordinator struct {
 	// atomic interger
 	remainingMapTasksCnt    int32
 	remainingReduceTasksCnt int32
-}
-
-type SafeMap struct {
-	m  map[string]bool
-	mu sync.Mutex
 }
 
 type SafeStatusMap struct {
@@ -63,25 +56,8 @@ func (c *Coordinator) checkTaskStatus(t Task) (int, bool) {
 
 // Your code here -- RPC handlers for the worker to call.
 
-func (c *Coordinator) RegisterWorker(args *RegisterWorkerArgs, reply *RegisterWorkerReply) error {
-
-	workerId := strconv.Itoa(int(atomic.AddInt32(&c.workerCnt, 1)))
-	reply.WorkerId = workerId
-	c.workerStatusMap.mu.Lock()
-	c.workerStatusMap.m[workerId] = true
-	c.workerStatusMap.mu.Unlock()
-
-	return nil
-}
-
-func (c *Coordinator) checkWorkerStatus(workerId string) bool {
-	c.workerStatusMap.mu.Lock()
-	defer c.workerStatusMap.mu.Unlock()
-	return c.workerStatusMap.m[workerId]
-}
-
 func (c *Coordinator) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
-	log.Printf("WorkerId : %v\n", args.WorkerId)
+	log.Println("Receive AskTask RPC")
 	// TODO: len(c.idleMapTasksQueue) may not be safe
 	if len(c.idleMapTasksQueue) == 0 && c.getRemainingMapTasksCnt() != 0 {
 		// return empty reply without any task since there is not idle map task
@@ -180,10 +156,10 @@ func (c *Coordinator) getReducerInputFiles(reduceTaskId int) []string {
 func (c *Coordinator) server() {
 	rpc.Register(c)
 	rpc.HandleHTTP()
-	l, e := net.Listen("tcp", ":1234")
-	// sockname := coordinatorSock()
-	// os.Remove(sockname)
-	// l, e := net.Listen("unix", sockname)
+	// l, e := net.Listen("tcp", ":1234")
+	sockname := coordinatorSock()
+	os.Remove(sockname)
+	l, e := net.Listen("unix", sockname)
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
@@ -210,7 +186,6 @@ func (c *Coordinator) Done() bool {
 //
 func NewCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{inputfiles: files, reduceTasksCnt: nReduce}
-	c.workerStatusMap = SafeMap{m: make(map[string]bool)}
 	c.taskStatusMap = SafeStatusMap{m: make(map[string]int)}
 	c.idleMapTasksQueue = make(chan Task, 100)
 	c.idleReduceTaskQueue = make(chan Task, 100)

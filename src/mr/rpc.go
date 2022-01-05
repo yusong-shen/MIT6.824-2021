@@ -11,15 +11,7 @@ import (
 	"strconv"
 )
 
-type RegisterWorkerArgs struct {
-}
-
-type RegisterWorkerReply struct {
-	WorkerId string
-}
-
 type AskTaskArgs struct {
-	WorkerId string
 }
 
 type AskTaskReply struct {

@@ -44,12 +44,8 @@ func ihash(key string) int {
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
-	argsRegister := RegisterWorkerArgs{}
-	replyRegister := RegisterWorkerReply{}
-	callRegisterWorker(&argsRegister, &replyRegister)
-
 	for {
-		ok := askAndProcessTask(replyRegister.WorkerId, mapf, reducef)
+		ok := askAndProcessTask(mapf, reducef)
 		if !ok {
 			log.Println("Something is wrong when contacting the coordinator, exit.")
 			break
@@ -61,9 +57,9 @@ func Worker(mapf func(string, string) []KeyValue,
 
 }
 
-func askAndProcessTask(workerId string, mapf func(string, string) []KeyValue,
+func askAndProcessTask(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) bool {
-	argsAskTask := AskTaskArgs{WorkerId: string(workerId)}
+	argsAskTask := AskTaskArgs{}
 	replyAskTask := AskTaskReply{}
 	ok := callAskTask(&argsAskTask, &replyAskTask)
 	if !ok {
@@ -91,13 +87,6 @@ func reportTaskComplete(task Task) bool {
 	return callReportTaskStatus(&argsReportTaskStatus, &replyReportTaskStatus)
 }
 
-func callRegisterWorker(args *RegisterWorkerArgs, reply *RegisterWorkerReply) bool {
-
-	ok := call("Coordinator.RegisterWorker", args, reply)
-	log.Printf("CallRegisterWorker - reply.workerId: %v\n", reply.WorkerId)
-	return ok
-}
-
 func callAskTask(args *AskTaskArgs, reply *AskTaskReply) bool {
 	ok := call("Coordinator.AskTask", args, reply)
 	log.Printf("CallAskTask - reply.T: %v\n", reply.T)
@@ -116,9 +105,9 @@ func callReportTaskStatus(args *ReportTaskStatusArgs, reply *ReportTaskStatusRep
 // returns false if something goes wrong.
 //
 func call(rpcname string, args interface{}, reply interface{}) bool {
-	c, err := rpc.DialHTTP("tcp", "127.0.0.1"+":1234")
-	// sockname := coordinatorSock()
-	// c, err := rpc.DialHTTP("unix", sockname)
+	// c, err := rpc.DialHTTP("tcp", "127.0.0.1"+":1234")
+	sockname := coordinatorSock()
+	c, err := rpc.DialHTTP("unix", sockname)
 	if err != nil {
 		log.Fatal("dialing:", err)
 	}
