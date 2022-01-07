@@ -1,15 +1,20 @@
 package mr
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type Task struct {
 	TaskType   TaskType
 	Inputfiles []string
 	TaskId     int
+	StartTime  time.Time
 }
 
 func (t Task) toString() string {
-	return fmt.Sprintf("%v", t)
+	// ignore the StartTime
+	return fmt.Sprintf("%v-%v-%v", t.TaskType, t.TaskId, t.Inputfiles)
 }
 
 type TaskStatus int

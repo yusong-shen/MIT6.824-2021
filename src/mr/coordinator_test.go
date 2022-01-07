@@ -75,8 +75,8 @@ func TestInitializeMapTasks(t *testing.T) {
 func TestReportTaskStatusRpc(t *testing.T) {
 	c := NewCoordinator([]string{"file1", "file2"}, 10)
 	c.initializeMapTasks()
-	assert.Equal(t, int32(2), c.getRemainingMapTasksCnt())
-	assert.Equal(t, int32(-1), c.getRemainingReduceTasksCnt())
+	assert.Equal(t, 2, c.getRemainingMapTasksCnt())
+	assert.Equal(t, 0, c.getRemainingReduceTasksCnt())
 
 	mapTask := Task{TaskType: Map, Inputfiles: []string{"file1"}, TaskId: 0}
 	arg := ReportTaskStatusArgs{T: mapTask, Status: Completed}
@@ -84,14 +84,14 @@ func TestReportTaskStatusRpc(t *testing.T) {
 	err := c.ReportTaskStatus(&arg, &reply)
 
 	assert.NoError(t, err)
-	assert.Equal(t, int32(1), c.getRemainingMapTasksCnt())
+	assert.Equal(t, 1, c.getRemainingMapTasksCnt())
 
 	reduceTask := Task{TaskType: Reduce, Inputfiles: []string{"reduceFile"}, TaskId: 0}
 	arg = ReportTaskStatusArgs{T: reduceTask, Status: Completed}
 	reply = ReportTaskStatusReply{}
 	err = c.ReportTaskStatus(&arg, &reply)
 	assert.NoError(t, err)
-	assert.Equal(t, int32(-2), c.getRemainingReduceTasksCnt())
+	assert.Equal(t, 0, c.getRemainingReduceTasksCnt())
 }
 
 func TestAskTaskRpc_AllMapTasksComplete_ShouldGetReduceTask(t *testing.T) {

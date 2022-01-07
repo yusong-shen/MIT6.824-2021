@@ -37,10 +37,10 @@ failed_any=0
 # 4: job count test
 # 5: early exit test
 # 6: crash test
-enabled_tests=(true true true true true false false)
+# enabled_tests=(true true true true true false false)
 # enabled_tests=(true false false false false false false)
-# enabled_tests=(false false false false false true false)
-# enabled_tests=(true true true true true true true)
+# enabled_tests=(false false false false false false true)
+enabled_tests=(true true true true false true true)
 
 #########################################################
 # first word-count
@@ -242,7 +242,7 @@ then
   # wait: usage: wait [n]
   # sort: No such file or directory 
   jobs &> /dev/null
-  wait -n
+  wait
 
   # a process has exited. this means that the output should be finalized
   # otherwise, either a worker or the coordinator exited early
