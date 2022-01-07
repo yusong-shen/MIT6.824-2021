@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -30,7 +31,7 @@ type Coordinator struct {
 }
 
 type SafeStatusMap struct {
-	m  map[string]int
+	m  map[string]TaskStatus
 	mu sync.Mutex
 }
 
@@ -41,7 +42,7 @@ func (c *Coordinator) initializeMapTasks() {
 		t := Task{TaskType: Map, Inputfiles: []string{file}, TaskId: i}
 		log.Printf("Initializing map task: %v\n", t)
 		c.taskStatusMap.mu.Lock()
-		c.taskStatusMap.m[t.toString()] = 1
+		c.taskStatusMap.m[t.toString()] = Idle
 		c.taskStatusMap.mu.Unlock()
 		// if queue is full, it will block until there is some consumer complete some tasks
 		c.idleMapTasksQueue <- t
@@ -50,7 +51,7 @@ func (c *Coordinator) initializeMapTasks() {
 
 }
 
-func (c *Coordinator) checkTaskStatus(t Task) (int, bool) {
+func (c *Coordinator) checkTaskStatus(t Task) (TaskStatus, bool) {
 	c.taskStatusMap.mu.Lock()
 	defer c.taskStatusMap.mu.Unlock()
 	status, ok := c.taskStatusMap.m[t.toString()]
@@ -77,7 +78,7 @@ func (c *Coordinator) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
 		reply.ReduceTasksCnt = c.reduceTasksCnt
 		// mark the task as in progress
 		c.taskStatusMap.mu.Lock()
-		c.taskStatusMap.m[t.toString()] = 2
+		c.taskStatusMap.m[t.toString()] = InProgress
 		c.taskStatusMap.mu.Unlock()
 		return nil
 	}
@@ -90,7 +91,7 @@ func (c *Coordinator) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
 		reply.ReduceTasksCnt = c.reduceTasksCnt
 		// mark the task as in progress
 		c.taskStatusMap.mu.Lock()
-		c.taskStatusMap.m[t.toString()] = 2
+		c.taskStatusMap.m[t.toString()] = InProgress
 		c.taskStatusMap.mu.Unlock()
 	}
 
@@ -100,6 +101,7 @@ func (c *Coordinator) AskTask(args *AskTaskArgs, reply *AskTaskReply) error {
 func (c *Coordinator) ReportTaskStatus(args *ReportTaskStatusArgs, reply *ReportTaskStatusReply) error {
 	task := args.T
 	if task.TaskType == Map && args.Status == Completed {
+		// TODO: only do it when task is not yet completed
 		atomic.AddInt32(&c.remainingMapTasksCnt, -1)
 		c.recordIntermediateFiles(args.OutputFiles)
 	} else if task.TaskType == Reduce && args.Status == Completed {
@@ -107,7 +109,7 @@ func (c *Coordinator) ReportTaskStatus(args *ReportTaskStatusArgs, reply *Report
 	}
 	// mark the task as completed
 	c.taskStatusMap.mu.Lock()
-	c.taskStatusMap.m[task.toString()] = 3
+	c.taskStatusMap.m[task.toString()] = Completed
 	c.taskStatusMap.mu.Unlock()
 	if c.getRemainingMapTasksCnt() == 0 && c.getRemainingReduceTasksCnt() == -1 {
 		c.taskInitializationMutex.Lock()
@@ -157,22 +159,39 @@ func (c *Coordinator) getRemainingReduceTasksCnt() int32 {
 func (c *Coordinator) initializeReduceTasks() {
 	atomic.StoreInt32(&c.remainingReduceTasksCnt, 0)
 	for i := 0; i < c.reduceTasksCnt; i++ {
-		inputFiles := c.getReducerInputFiles(i)
+		// do atomic renaming
+		inputFiles := c.renameFiles(c.getReducerInputFiles(i))
 		if len(inputFiles) == 0 {
 			log.Printf("Skip reduce task id=%v, since there is not input file\n", i)
 			continue
 		}
-		task := Task{TaskType: Reduce, Inputfiles: c.getReducerInputFiles(i), TaskId: i}
+		task := Task{TaskType: Reduce, Inputfiles: inputFiles, TaskId: i}
 		// update the task status map
 		log.Printf("Initializing reduce task: %v\n", task)
 		c.taskStatusMap.mu.Lock()
-		c.taskStatusMap.m[task.toString()] = 1
+		c.taskStatusMap.m[task.toString()] = Idle
 		c.taskStatusMap.mu.Unlock()
 		c.idleReduceTaskQueue <- task
 		atomic.AddInt32(&c.remainingReduceTasksCnt, 1)
 	}
 	log.Printf("IdleReduceTaskQueue Len: %d\n", len(c.idleReduceTaskQueue))
 
+}
+
+func (c *Coordinator) renameFiles(files []string) []string {
+	ret := make([]string, 0)
+	for i, file := range files {
+		newName := fmt.Sprintf("mr-%v-%v", i, c.getReducerId(file))
+		err := os.Rename(file, newName)
+		if err != nil {
+			log.Printf("Error when renaming file: %v\n", err)
+		} else {
+			log.Printf("Renaming file from %v to %v\n", file, newName)
+			ret = append(ret, newName)
+		}
+
+	}
+	return ret
 }
 
 func (c *Coordinator) getReducerInputFiles(reduceTaskId int) []string {
@@ -221,7 +240,7 @@ func (c *Coordinator) Done() bool {
 //
 func NewCoordinator(files []string, nReduce int) *Coordinator {
 	c := Coordinator{inputfiles: files, reduceTasksCnt: nReduce}
-	c.taskStatusMap = SafeStatusMap{m: make(map[string]int)}
+	c.taskStatusMap = SafeStatusMap{m: make(map[string]TaskStatus)}
 	c.idleMapTasksQueue = make(chan Task, 100)
 	c.idleReduceTaskQueue = make(chan Task, 100)
 	c.remainingReduceTasksCnt = -1

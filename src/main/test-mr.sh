@@ -38,6 +38,7 @@ failed_any=0
 # 5: early exit test
 # 6: crash test
 enabled_tests=(true true true true true false false)
+# enabled_tests=(true false false false false false false)
 # enabled_tests=(false false false false false true false)
 # enabled_tests=(true true true true true true true)
 
@@ -237,6 +238,9 @@ then
   # wait for any of the coord or workers to exit
   # `jobs` ensures that any completed old processes from other tests
   # are not waited upon
+  # TODO: In mac, it shows: test-mr.sh: line 241: wait: -n: invalid option
+  # wait: usage: wait [n]
+  # sort: No such file or directory 
   jobs &> /dev/null
   wait -n
 

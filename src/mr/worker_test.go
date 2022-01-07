@@ -25,13 +25,13 @@ func TestIHash(t *testing.T) {
 
 func TestWriteIntermediateDataToFile(t *testing.T) {
 	data := []KeyValue{{Key: "k1", Value: "v1"}, {Key: "k2", Value: "v2"}}
-	writeIntermediateDataToFile(data, "temp.json")
+	filename := writeIntermediateDataToFile(data, 2)
 
-	output, err := readJsonData("temp.json")
+	output, err := readJsonData(filename)
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, data, output)
 
-	os.Remove("temp.json")
+	os.Remove(filename)
 }
 
 func TestAssignKvToReducer(t *testing.T) {

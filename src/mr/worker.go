@@ -138,15 +138,24 @@ func readFile(filename string) (string, error) {
 	return string(content), nil
 }
 
-func writeIntermediateDataToFile(intermediateData []KeyValue, filename string) {
-	file, err := json.MarshalIndent(intermediateData, "", " ")
+func writeIntermediateDataToFile(intermediateData []KeyValue, iReduce int) string {
+	data, err := json.MarshalIndent(intermediateData, "", " ")
 	if err != nil {
 		log.Printf("Error: %v\n", err)
 	}
-	err = ioutil.WriteFile(filename, file, 0644)
+	// use default os temp directory
+	filenamePattern := fmt.Sprintf("mr-temp-*-%v", iReduce)
+	tempFile, err := ioutil.TempFile("", filenamePattern)
+	if err != nil {
+		log.Printf("Error when creating temp file: %v\n", err)
+	}
+	filename := tempFile.Name()
+	log.Printf("Create temp file: %v\n", filename)
+	_, err = tempFile.Write(data)
 	if err != nil {
 		log.Printf("Error write to file: %v\n", err)
 	}
+	return filename
 }
 
 func readJsonData(filename string) ([]KeyValue, error) {
@@ -192,14 +201,11 @@ func processMapTask(task Task, reduceTasksCnt int, mapf func(string, string) []K
 
 		intermediateDataMap := make(map[int][]KeyValue)
 		assignKvToReducer(intermediateData, intermediateDataMap, reduceTasksCnt)
-		// intermediate files is mr-X-Y, where X is the Map task number,
-		// and Y is the reduce task number.
+		// intermediate files is temp-Y, where Y is the reduce task number.
 		for iReduce, kvList := range intermediateDataMap {
-			// intermediateFilename := "mr-" + strconv.Itoa(task.TaskId) + "-" + strconv.Itoa(iReduce)
-			intermediateFilename := fmt.Sprintf("mr-%v-%v", task.TaskId, iReduce)
-			intermediateFilenames = append(intermediateFilenames, intermediateFilename)
-			log.Printf("Writing intermediate file: %v\n", intermediateFilename)
-			writeIntermediateDataToFile(kvList, intermediateFilename)
+			filename := writeIntermediateDataToFile(kvList, iReduce)
+			intermediateFilenames = append(intermediateFilenames, filename)
+
 		}
 	}
 	return intermediateFilenames

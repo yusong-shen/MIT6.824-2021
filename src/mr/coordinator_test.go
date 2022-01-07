@@ -2,6 +2,7 @@ package mr
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,7 +24,7 @@ func TestAskTaskRpc(t *testing.T) {
 	// assert task status is 2 (in progress)
 	status, ok := c.checkTaskStatus(reply.T)
 	assert.True(t, ok)
-	assert.Equal(t, 2, status)
+	assert.Equal(t, InProgress, status)
 }
 
 func TestAskTaskRpc_NotIdleMapTask(t *testing.T) {
@@ -51,25 +52,24 @@ func TestInitializeMapTasks(t *testing.T) {
 	c.initializeMapTasks()
 	status, ok := c.checkTaskStatus(Task{TaskType: Map})
 	assert.False(t, ok)
-	assert.Equal(t, status, 0)
+	assert.Equal(t, Unknown, status)
 
 	status, ok = c.checkTaskStatus(Task{TaskType: Map, Inputfiles: []string{"file1", "file2"}})
 	assert.False(t, ok)
-	assert.Equal(t, status, 0)
+	assert.Equal(t, Unknown, status)
 
 	status, ok = c.checkTaskStatus(Task{TaskType: Reduce})
 	assert.False(t, ok)
-	assert.Equal(t, status, 0)
+	assert.Equal(t, Unknown, status)
 
 	// assert task status is 1 (idle)
 	status, ok = c.checkTaskStatus(Task{TaskType: Map, Inputfiles: []string{"file1"}, TaskId: 0})
 	assert.True(t, ok)
-	assert.Equal(t, 1, status)
+	assert.Equal(t, Idle, status)
 
 	status, ok = c.checkTaskStatus(Task{TaskType: Map, Inputfiles: []string{"file2"}, TaskId: 1})
 	assert.True(t, ok)
-	assert.Equal(t, 1, status)
-
+	assert.Equal(t, Idle, status)
 }
 
 func TestReportTaskStatusRpc(t *testing.T) {
@@ -107,7 +107,9 @@ func TestAskTaskRpc_AllMapTasksComplete_ShouldGetReduceTask(t *testing.T) {
 	assert.NoError(t, err)
 
 	// complete the task
-	argReportTask := ReportTaskStatusArgs{T: replyAskTask.T, Status: Completed, OutputFiles: []string{"mr-0-0"}}
+	filename := "mr-temp-0-0"
+	os.Create("mr-temp-0-0")
+	argReportTask := ReportTaskStatusArgs{T: replyAskTask.T, Status: Completed, OutputFiles: []string{filename}}
 	replyReportTask := ReportTaskStatusReply{}
 	err = c.ReportTaskStatus(&argReportTask, &replyReportTask)
 	assert.NoError(t, err)
@@ -127,7 +129,10 @@ func TestAskTaskRpc_AllMapTasksComplete_ShouldGetReduceTask(t *testing.T) {
 	// assert task status is 2 (in progress)
 	status, ok := c.checkTaskStatus(replyAskTask.T)
 	assert.True(t, ok)
-	assert.Equal(t, 2, status)
+	assert.Equal(t, status, InProgress)
+
+	// clean up
+	os.Remove("mr-0-0")
 }
 
 func TestDone(t *testing.T) {
@@ -144,7 +149,9 @@ func TestDone(t *testing.T) {
 	assert.False(t, c.Done())
 
 	// complete the map task
-	argReportTask := ReportTaskStatusArgs{T: replyAskTask.T, Status: Completed, OutputFiles: []string{"mr-0-0"}}
+	filename := "mr-temp-0-0"
+	os.Create("mr-temp-0-0")
+	argReportTask := ReportTaskStatusArgs{T: replyAskTask.T, Status: Completed, OutputFiles: []string{filename}}
 	replyReportTask := ReportTaskStatusReply{}
 	err = c.ReportTaskStatus(&argReportTask, &replyReportTask)
 	assert.NoError(t, err)
@@ -167,6 +174,10 @@ func TestDone(t *testing.T) {
 	// act:
 	// assert done should return result as true
 	assert.True(t, c.Done())
+
+	// clean up
+	os.Remove("mr-0-0")
+
 }
 
 func TestGetReducerId(t *testing.T) {
